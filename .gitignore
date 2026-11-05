@@ -1,0 +1,35 @@
+## .NET build output
+bin/
+obj/
+artifacts/
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+## Docs
+docs/_site/
+docs/api/*.yml
+docs/api/.manifest
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Local test/emulator data
+cosmos-data/

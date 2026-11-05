@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Mietex.CosmosDb/Mietex.CosmosDb.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Mietex.CosmosDb.Tests/Mietex.CosmosDb.Tests.csproj" />
+  </Folder>
+</Solution>
