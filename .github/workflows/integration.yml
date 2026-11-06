@@ -26,7 +26,11 @@ jobs:
           - 8280:8080
           - 1234:1234
         env:
+          PROTOCOL: https
+          PORT: "8281"
+          EXPLORER_PROTOCOL: https
           ENABLE_EXPLORER: "false"
+          ENABLE_TELEMETRY: "false"
     env:
       MIETEX_COSMOSDB_EMULATOR_PORT: "8281"
       MIETEX_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
@@ -40,7 +44,7 @@ jobs:
       - name: Wait for emulator
         shell: bash
         run: |
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 150); do
             if curl -k -sS --max-time 2 https://localhost:8281/ >/dev/null; then
               echo "Cosmos emulator is ready."
               exit 0
@@ -48,6 +52,11 @@ jobs:
             sleep 2
           done
           echo "Cosmos emulator did not become ready in time."
+          docker ps -a || true
+          for container in $(docker ps -aq); do
+            echo "--- logs for $container"
+            docker logs "$container" 2>&1 | tail -100 || true
+          done
           exit 1
       - name: Integration tests
         run: >
