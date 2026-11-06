@@ -8,15 +8,16 @@
 
 | Item | Value |
 | --- | --- |
-| Phase | 5 — implementation (red suite ready) |
+| Phase | 6 — implementation review |
 | Branch | `main` |
 | Package | `Mietex.CosmosDb` (MIT, `net8.0;net10.0`) |
 | Source projects | READ-ONLY: `legacy host root\legacy host`, `legacy host root\legacy host` |
 | Test strategy | Real Cosmos DB vNext emulator in Docker; SDK `Container` mocks forbidden |
 | Emulator used locally | `cosmos-legacy host-Dev`, https://localhost:8281 |
-| Test count | 146 discovered (`net10.0`), 61 unit + 85 integration |
-| Last red run | Library API still throws `NotImplementedException`; expected red |
-| Next action | Implement contracts/options/provider/serializer/local endpoint/feed, then context and locking pipeline |
+| Test count | 145 passing (`net10.0`): 71 unit + 73 integration + 1 smoke |
+| Last green run | `net10.0` full suite green; `net8.0` unit suite green |
+| Emulator | Real vNext emulator, real containers, no SDK mocks |
+| Next action | Independent implementation review, fix findings, then docs + CI/CD |
 
 ## TODOs
 
@@ -53,11 +54,11 @@
 - [x] Apply fixes (blockers B1–B3 and high-value should-fix items; report in `docs/reviews/01-test-review.md`).
 
 ### 5. Implementation
-- [ ] Contracts, options validation, client provider.
-- [ ] `CosmosDbContextBase` save pipeline, audit, delete, patch, hooks.
-- [ ] `CosmosDbSet`, feed extensions, serializer, local endpoint support.
-- [ ] `CosmosPartitionLock` and `CosmosLockingDbContextBase`.
-- [ ] Run the suite until green on the emulator.
+- [x] Contracts, options validation, client provider.
+- [x] `CosmosDbContextBase` save pipeline, audit, delete, patch, hooks.
+- [x] `CosmosDbSet`, feed extensions, serializer, local endpoint support.
+- [x] `CosmosPartitionLock` and `CosmosLockingDbContextBase`.
+- [x] Run the suite until green on the emulator.
 
 ### 6. Test review #2
 - [ ] Independent review after implementation (coverage gaps, edge cases, flakiness).
@@ -81,6 +82,37 @@
 - [ ] NuGet trusted-publishing policy instructions (manual account step).
 - [ ] Dry-run pack locally and validate the `.nupkg`.
 - [ ] Commit and push repository; verify workflows on GitHub.
+
+## Review #2 remediation TODO
+
+Source: [docs/reviews/02-implementation-review.md](docs/reviews/02-implementation-review.md). Commit after each stage.
+
+### Stage A — security blockers
+- [ ] B1: require every `AccountEndpoint` in a connection string to be loopback; reject duplicates that mix local and remote.
+- [ ] B2: verify an existing lock document is really a `DistributedLock` lease before takeover; never overwrite a business document.
+- [ ] B3: derive the default client key from a hash, not the connection string; redact `ConnectionString` in `CosmosDbOptions.ToString()` and `CosmosClientDescriptor.ToString()`.
+- [ ] Add regression tests for B1/B2/B3.
+
+### Stage B — correctness cluster
+- [ ] S1: make `DiscriminatorResolver` authoritative for writes; test custom resolver end-to-end.
+- [ ] S2: count `AdditionalBatchOperationCount` in the base batch-limit validation; add hook test.
+- [ ] S3: preserve root batch error messages, add fallback, bound the error read; test non-null 409 message.
+- [ ] S4: guard query formatting by `IsEnabled(Trace)`, catch formatter failures, sanitize control characters, single-pass replacement; add tests.
+- [ ] S5: evict or refresh cache after patch-by-id and soft delete; test cached soft-delete state.
+
+### Stage C — locking and test infrastructure
+- [ ] S6: make locking `ClearAsync` unconditional after entry and test a canceled token.
+- [ ] S7: guard acquire-vs-dispose, recompute takeover time, retry transient reads, make release single-use, reject empty acquisition ETag.
+- [ ] S8: fixture catches malformed connection strings and skips; database name gets 8+ random hex chars; sanitize skip reason.
+- [ ] S9: add a discovery test for `= null!` auto-properties; document supported set-property shapes.
+- [ ] S10: document and test both fencing failure modes (local expiry vs server 412).
+
+### Stage D — client, migration, test quality
+- [ ] S11: test effective client construction with a unique provider/key; clone serializer settings before callback; document injected-client ownership.
+- [ ] S12: migration docs for JSON property names/container path and `_etag`; add storage-shape tests.
+- [ ] S13: define request-level Cosmos exception contract; wrap or document.
+- [ ] S14: strengthen weak tests (hook invocation, N-way timing, serializer factory list, smoke trait).
+- [ ] S15: packaging test, CI workflows, DocFX, migration guides (next phase).
 
 ## Phase log
 

@@ -29,23 +29,8 @@ public static class CosmosLocalEndpointSupport
             return false;
         }
 
-        var endpoint = FindAccountEndpoint(connectionString);
-        if (string.IsNullOrWhiteSpace(endpoint))
-        {
-            return false;
-        }
-
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
-        {
-            return false;
-        }
-
-        // Uri.IsLoopback is case-sensitive for "LOCALHOST" on some runtime versions.
-        return uri.IsLoopback ||
-            uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-            uri.Host.Equals("127.0.0.1", StringComparison.Ordinal) ||
-            uri.Host.Equals("::1", StringComparison.Ordinal) ||
-            uri.Host.Equals("[::1]", StringComparison.Ordinal);
+        var endpoints = FindAccountEndpoints(connectionString);
+        return endpoints.Count > 0 && endpoints.All(IsLoopbackEndpoint);
     }
 
     /// <summary>Applies gateway mode and TLS relaxation when the endpoint is loopback.</summary>
@@ -101,8 +86,9 @@ public static class CosmosLocalEndpointSupport
             .ConfigureAwait(false);
     }
 
-    private static string? FindAccountEndpoint(string connectionString)
+    private static List<string> FindAccountEndpoints(string connectionString)
     {
+        var endpoints = new List<string>();
         foreach (var part in connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             var separator = part.IndexOf('=');
@@ -114,10 +100,25 @@ public static class CosmosLocalEndpointSupport
             var name = part[..separator].Trim();
             if (name.Equals("AccountEndpoint", StringComparison.OrdinalIgnoreCase))
             {
-                return part[(separator + 1)..].Trim();
+                endpoints.Add(part[(separator + 1)..].Trim());
             }
         }
 
-        return null;
+        return endpoints;
+    }
+
+    private static bool IsLoopbackEndpoint(string endpoint)
+    {
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        // Uri.IsLoopback is case-sensitive for "LOCALHOST" on some runtime versions.
+        return uri.IsLoopback ||
+            uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.Equals("127.0.0.1", StringComparison.Ordinal) ||
+            uri.Host.Equals("::1", StringComparison.Ordinal) ||
+            uri.Host.Equals("[::1]", StringComparison.Ordinal);
     }
 }

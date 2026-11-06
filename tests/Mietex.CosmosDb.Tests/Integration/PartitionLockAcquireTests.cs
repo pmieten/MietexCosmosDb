@@ -287,6 +287,42 @@ public sealed class PartitionLockAcquireTests : LockingIntegrationTestBase
     }
 
     [Fact]
+    public async Task AcquisitionRefusesToOverwriteANonLeaseDocumentWithTheLockId()
+    {
+        var partitionKey = NewPartition();
+        var resourceKey = "resource-" + Guid.NewGuid().ToString("N");
+        var lockId = "distributed-lock-" +
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(resourceKey)));
+        var businessDocument = new TestEntity
+        {
+            Id = lockId,
+            PartitionKey = partitionKey,
+            Name = "important business document",
+        };
+
+        await Container.CreateItemAsync(
+            businessDocument,
+            new PartitionKey(partitionKey),
+            cancellationToken: Cancellation);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CosmosPartitionLock.AcquireAsync(
+                Container,
+                partitionKey,
+                resourceKey,
+                LockOptions(acquireTimeout: TimeSpan.FromSeconds(1)),
+                cancellationToken: Cancellation));
+
+        Assert.Contains("not a valid distributed-lock lease", exception.Message);
+        var unchanged = await Container.ReadItemAsync<TestEntity>(
+            lockId,
+            new PartitionKey(partitionKey),
+            cancellationToken: Cancellation);
+        Assert.Equal("important business document", unchanged.Resource.Name);
+        Assert.Equal(nameof(TestEntity), unchanged.Resource.Discriminator);
+    }
+
+    [Fact]
     public async Task SameResourceKeyInDifferentPartitionsIsIndependent()
     {
         var resourceKey = "shared-resource-" + Guid.NewGuid().ToString("N");

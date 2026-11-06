@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -107,6 +108,35 @@ public sealed record CosmosDbOptions
 
     /// <summary>Gets how long lock cleanup may take.</summary>
     public TimeSpan LockCleanupTimeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>Renders options without exposing credentials.</summary>
+    /// <returns>A redacted diagnostic representation.</returns>
+    public override string ToString()
+    {
+        var builder = new StringBuilder();
+        builder.Append("CosmosDbOptions { ");
+        builder.Append("DatabaseName = ").Append(DatabaseName);
+        builder.Append(", ContainerName = ").Append(ContainerName);
+        builder.Append(", PartitionKey = ").Append(PartitionKey);
+        builder.Append(", ConnectionString = ").Append(ConnectionString is null ? "null" : "***");
+        builder.Append(", Client = ").Append(Client is null ? "null" : "***");
+        builder.Append(", ClientProvider = ")
+            .Append(ClientProvider is null ? "null" : ClientProvider.GetType().FullName);
+        builder.Append(", ClientKey = ").Append(ClientKey);
+        builder.Append(", ConsistencyLevel = ").Append(ConsistencyLevel);
+        builder.Append(", UpdateMode = ").Append(UpdateMode);
+        builder.Append(", ConcurrencyMode = ").Append(ConcurrencyMode);
+        builder.Append(", BatchOperationLimit = ").Append(BatchOperationLimit);
+        builder.Append(", EnableCache = ").Append(EnableCache);
+        builder.Append(", EnableSoftDelete = ").Append(EnableSoftDelete);
+        builder.Append(", RequireUserForAuditedWrites = ").Append(RequireUserForAuditedWrites);
+        builder.Append(", ApplicationName = ").Append(ApplicationName);
+        builder.Append(", LockAcquireTimeout = ").Append(LockAcquireTimeout);
+        builder.Append(", LockLeaseDuration = ").Append(LockLeaseDuration);
+        builder.Append(", LockCleanupTimeout = ").Append(LockCleanupTimeout);
+        builder.Append(" }");
+        return builder.ToString();
+    }
 
     /// <summary>Validates the option combination.</summary>
     /// <exception cref="ArgumentException">A required value is empty or a value is out of range.</exception>

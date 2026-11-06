@@ -1,5 +1,6 @@
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
@@ -497,13 +498,17 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
 
     private static string BuildDefaultClientKey(
         CosmosDbOptions options,
-        string connectionString) =>
-        string.Join(
-            '|',
+        string connectionString)
+    {
+        var payload = string.Join(
+            '\0',
             connectionString,
             options.ApplicationName,
             options.ConsistencyLevel.ToString(),
             options.DatabaseName);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        return "client-" + Convert.ToHexString(hash);
+    }
 
     private void DiscoverSets()
     {

@@ -349,7 +349,19 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            if (existing.Resource.ExpiresAt > now)
+            var lease = existing.Resource;
+            if (lease is null ||
+                !string.Equals(lease.Id, lockId, StringComparison.Ordinal) ||
+                !string.Equals(lease.Discriminator, "DistributedLock", StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(lease.Owner) ||
+                lease.ExpiresAt == default)
+            {
+                throw new InvalidOperationException(
+                    $"The document with id '{lockId}' is not a valid distributed-lock lease. " +
+                    "Refusing to overwrite it; choose a different resource key or clean up the conflicting document.");
+            }
+
+            if (lease.ExpiresAt > now)
             {
                 return null;
             }

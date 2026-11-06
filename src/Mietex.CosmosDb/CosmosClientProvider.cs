@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using Microsoft.Azure.Cosmos;
 
 namespace Mietex.CosmosDb;
@@ -10,7 +11,20 @@ namespace Mietex.CosmosDb;
 public sealed record CosmosClientDescriptor(
     string ClientKey,
     string ConnectionString,
-    CosmosClientOptions ClientOptions);
+    CosmosClientOptions ClientOptions)
+{
+    /// <summary>Renders the descriptor without exposing the connection string.</summary>
+    /// <returns>A redacted diagnostic representation.</returns>
+    public override string ToString()
+    {
+        var builder = new StringBuilder();
+        builder.Append("CosmosClientDescriptor { ClientKey = ").Append(ClientKey);
+        builder.Append(", ConnectionString = ").Append(ConnectionString is null ? "null" : "***");
+        builder.Append(", ClientOptions = ").Append(ClientOptions);
+        builder.Append(" }");
+        return builder.ToString();
+    }
+}
 
 /// <summary>Creates or returns Cosmos clients.</summary>
 public interface ICosmosClientProvider

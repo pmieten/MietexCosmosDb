@@ -46,6 +46,23 @@ public sealed class CosmosLocalEndpointSupportTests
         Assert.Equal(expected, CosmosLocalEndpointSupport.IsLocalEndpoint(connectionString));
     }
 
+    [Theory]
+    [InlineData(
+        "AccountEndpoint=https://localhost:8281/;AccountEndpoint=https://example.documents.azure.com:443/;AccountKey=key;",
+        false)]
+    [InlineData(
+        "AccountEndpoint=https://example.documents.azure.com:443/;AccountEndpoint=https://localhost:8281/;AccountKey=key;",
+        false)]
+    [InlineData(
+        "AccountEndpoint=https://localhost:8281/;AccountEndpoint=https://127.0.0.1:8282/;AccountKey=key;",
+        true)]
+    public void IsLocalEndpointRequiresEveryAccountEndpointToBeLoopback(
+        string connectionString,
+        bool expected)
+    {
+        Assert.Equal(expected, CosmosLocalEndpointSupport.IsLocalEndpoint(connectionString));
+    }
+
     [Fact]
     public void ApplyIfLocalEndpointConfiguresGatewayAndHttpClientFactory()
     {

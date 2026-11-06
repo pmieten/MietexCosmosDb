@@ -167,6 +167,46 @@ public sealed class CosmosDbOptionsValidationTests
         options.Validate();
     }
 
+    [Fact]
+    public void ToStringRedactsTheConnectionString()
+    {
+        var options = ValidOptions();
+
+        var text = options.ToString();
+
+        Assert.DoesNotContain("AccountKey", text);
+        Assert.DoesNotContain(CosmosLocalEndpointSupport.EmulatorAccountKey, text);
+        Assert.Contains("***", text);
+    }
+
+    [Fact]
+    public void DescriptorToStringRedactsTheConnectionString()
+    {
+        var descriptor = new CosmosClientDescriptor(
+            "key",
+            ConnectionString,
+            new CosmosClientOptions());
+
+        var text = descriptor.ToString();
+
+        Assert.DoesNotContain("AccountKey", text);
+        Assert.DoesNotContain(CosmosLocalEndpointSupport.EmulatorAccountKey, text);
+        Assert.Contains("***", text);
+    }
+
+    [Fact]
+    public void DefaultClientKeyIsAHashAndDoesNotContainTheSecret()
+    {
+        using var provider = new CapturingProvider();
+        var options = ValidOptions() with { ClientProvider = provider };
+        using var context = new TestDbContext(options);
+
+        Assert.NotNull(provider.Descriptor);
+        Assert.StartsWith("client-", provider.Descriptor!.ClientKey);
+        Assert.DoesNotContain("AccountKey", provider.Descriptor.ClientKey);
+        Assert.DoesNotContain(CosmosLocalEndpointSupport.EmulatorAccountKey, provider.Descriptor.ClientKey);
+    }
+
     private static CosmosDbOptions ValidOptions() => new()
     {
         DatabaseName = "database",
@@ -174,6 +214,22 @@ public sealed class CosmosDbOptionsValidationTests
         PartitionKey = "partition",
         ConnectionString = ConnectionString,
     };
+
+    private sealed class CapturingProvider : ICosmosClientProvider, IDisposable
+    {
+        private CosmosClient? _client;
+
+        public CosmosClientDescriptor? Descriptor { get; private set; }
+
+        public CosmosClient GetClient(CosmosClientDescriptor descriptor)
+        {
+            Descriptor = descriptor;
+            _client = new CosmosClient(descriptor.ConnectionString, descriptor.ClientOptions);
+            return _client;
+        }
+
+        public void Dispose() => _client?.Dispose();
+    }
 
     private sealed class StubCosmosSerializer : CosmosSerializer
     {
