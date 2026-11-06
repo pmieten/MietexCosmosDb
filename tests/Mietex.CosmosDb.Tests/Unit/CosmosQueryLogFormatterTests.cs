@@ -98,6 +98,58 @@ public sealed class CosmosQueryLogFormatterTests
     }
 
     [Fact]
+    public void SingleQuotesAreEscaped()
+    {
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.Name = @name")
+            .WithParameter("@name", "O'Brien");
+
+        var formatted = CosmosQueryLogFormatter.Format(query);
+
+        Assert.Contains("'O''Brien'", formatted);
+    }
+
+    [Fact]
+    public void ControlCharactersAreEscapedForLogSafety()
+    {
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.Name = @name")
+            .WithParameter("@name", "line1\nline2\r\t");
+
+        var formatted = CosmosQueryLogFormatter.Format(query);
+
+        Assert.DoesNotContain("\n", formatted);
+        Assert.DoesNotContain("\r", formatted);
+        Assert.DoesNotContain("\t", formatted);
+        Assert.Contains("\\n", formatted);
+        Assert.Contains("\\r", formatted);
+        Assert.Contains("\\t", formatted);
+    }
+
+    [Fact]
+    public void PrefixParameterNamesAreReplacedWithoutCorruptingLongerNames()
+    {
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.Id = @id OR c.Other = @id2")
+            .WithParameter("@id", "first")
+            .WithParameter("@id2", "second");
+
+        var formatted = CosmosQueryLogFormatter.Format(query);
+
+        Assert.Contains("'first'", formatted);
+        Assert.Contains("'second'", formatted);
+        Assert.DoesNotContain("@id", formatted);
+    }
+
+    [Fact]
+    public void UnformattableValuesDoNotBreakFormatting()
+    {
+        var query = new QueryDefinition("SELECT * FROM c WHERE c.Value = @value")
+            .WithParameter("@value", new ThrowingValue());
+
+        var formatted = CosmosQueryLogFormatter.Format(query);
+
+        Assert.Contains("<unformattable>", formatted);
+    }
+
+    [Fact]
     public void FormattingDoesNotChangeTheQueryDefinition()
     {
         var query = new QueryDefinition("SELECT * FROM c WHERE c.Name = @name")
@@ -108,5 +160,10 @@ public sealed class CosmosQueryLogFormatterTests
 
         Assert.NotEmpty(formatted);
         Assert.Equal(originalQueryText, query.QueryText);
+    }
+
+    private sealed class ThrowingValue
+    {
+        public override string ToString() => throw new InvalidOperationException("boom");
     }
 }

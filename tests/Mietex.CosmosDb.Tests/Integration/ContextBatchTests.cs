@@ -113,6 +113,9 @@ public sealed class ContextBatchTests : IntegrationContextTestBase
             Assert.Contains(
                 exception.Failures,
                 failure => failure.Index == 1 && failure.StatusCode == HttpStatusCode.Conflict);
+            Assert.All(
+                exception.Failures,
+                failure => Assert.False(string.IsNullOrWhiteSpace(failure.Message)));
             Assert.False(string.IsNullOrWhiteSpace(exception.Diagnostics));
             Assert.False(string.IsNullOrWhiteSpace(exception.ActivityId));
             Assert.True(exception.RequestCharge > 0);

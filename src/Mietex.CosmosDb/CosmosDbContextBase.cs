@@ -47,6 +47,12 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
             new EventId(4, "OnSaveFinishedFailed"),
             "OnSaveFinishedAsync threw after a save attempt.");
 
+    private static readonly Action<ILogger, Exception?> QueryFormattingFailed =
+        LoggerMessage.Define(
+            LogLevel.Debug,
+            new EventId(5, "QueryFormattingFailed"),
+            "Could not format a Cosmos query for trace logging; the original query will be used.");
+
     private readonly CosmosDbOptions _options;
     private readonly ILogger _logger;
     private readonly TimeProvider _timeProvider;
@@ -128,7 +134,8 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         var now = _timeProvider.GetUtcNow();
 
         entity.PartitionKey = PartitionKey;
-        if (string.IsNullOrWhiteSpace(entity.Discriminator))
+        if (_options.DiscriminatorResolver is not null ||
+            string.IsNullOrWhiteSpace(entity.Discriminator))
         {
             entity.Discriminator = ResolveDiscriminator(entity.GetType());
         }
@@ -183,7 +190,13 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
                 PatchOperation.Set("/DeletedDate", now),
                 PatchOperation.Set("/DeletedById", CurrentUser),
             ];
-            _pending.Add(new PendingOperation(PendingKind.Patch, entity, entity.Id, operations));
+            _pending.Add(new PendingOperation(
+                PendingKind.Patch,
+                entity,
+                entity.Id,
+                operations,
+                SoftDeletedAt: now,
+                SoftDeletedBy: CurrentUser));
             return;
         }
 
@@ -223,10 +236,21 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         EnsureUsable();
         ArgumentNullException.ThrowIfNull(queryDefinition);
 
-        QueryExecuting(
-            _logger,
-            CosmosQueryLogFormatter.Format(queryDefinition),
-            null);
+        if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            string formatted;
+            try
+            {
+                formatted = CosmosQueryLogFormatter.Format(queryDefinition);
+            }
+            catch (Exception exception)
+            {
+                QueryFormattingFailed(_logger, exception);
+                formatted = queryDefinition.QueryText;
+            }
+
+            QueryExecuting(_logger, formatted, null);
+        }
 
         return _container.GetItemQueryIterator<T>(
             queryDefinition,
@@ -308,7 +332,7 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
             try
             {
                 WriteBackEtags(response);
-                EvictHardDeletedDocuments();
+                ApplyPostCommitCacheEffects();
             }
             catch (Exception exception)
             {
@@ -396,10 +420,11 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
     /// <param name="pendingOperationCount">Pending business operation count.</param>
     protected virtual void ValidateBatchOperationCount(int pendingOperationCount)
     {
-        if (pendingOperationCount > _options.BatchOperationLimit)
+        var operationCount = pendingOperationCount + AdditionalBatchOperationCount;
+        if (operationCount > _options.BatchOperationLimit)
         {
             throw new InvalidOperationException(
-                $"The save contains {pendingOperationCount} operations, which exceeds the configured batch limit of {_options.BatchOperationLimit}.");
+                $"The save contains {operationCount} operations, which exceeds the configured batch limit of {_options.BatchOperationLimit}.");
         }
     }
 
@@ -618,19 +643,39 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         }
     }
 
-    private void EvictHardDeletedDocuments()
+    private void ApplyPostCommitCacheEffects()
     {
         foreach (var operation in _pending)
         {
-            if (operation.Kind != PendingKind.Delete || operation.Entity is null)
+            if (operation.Kind == PendingKind.Delete)
+            {
+                EvictFromAllSets(operation.Id);
+                continue;
+            }
+
+            if (operation.Kind != PendingKind.Patch)
             {
                 continue;
             }
 
-            foreach (var set in _dbSets)
+            if (operation.SoftDeletedAt is { } deletedAt &&
+                operation.Entity is IDeletedAuditEntity<TUser> deleted)
             {
-                set.Evict(operation.Id);
+                deleted.DeletedDate = deletedAt;
+                deleted.DeletedById = operation.SoftDeletedBy;
+                continue;
             }
+
+            // Arbitrary patches and patch-by-id may have changed fields we cannot replay locally.
+            EvictFromAllSets(operation.Id);
+        }
+    }
+
+    private void EvictFromAllSets(string id)
+    {
+        foreach (var set in _dbSets)
+        {
+            set.Evict(id);
         }
     }
 
@@ -650,12 +695,16 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
             failures.Add(new CosmosBatchOperationError(
                 index,
                 result.StatusCode,
-                ReadErrorMessage(result)));
+                ReadErrorMessage(result) ??
+                    response.ErrorMessage ??
+                    result.StatusCode.ToString()));
         }
 
+        var rootFailureCount = failures.Count(
+            failure => failure.StatusCode != HttpStatusCode.FailedDependency);
         var message =
             $"The Cosmos transactional batch failed with status {response.StatusCode}. " +
-            $"{failures.Count} of {operationCount} operations failed.";
+            $"{rootFailureCount} of {operationCount} operations failed.";
 
         return new CosmosBatchException(
             message,
@@ -682,8 +731,9 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
                 detectEncodingFromByteOrderMarks: false,
                 bufferSize: 1024,
                 leaveOpen: true);
-            var message = reader.ReadToEnd();
-            return message.Length <= 4096 ? message : message[..4096];
+            var buffer = new char[4096];
+            var read = reader.ReadBlock(buffer, 0, buffer.Length);
+            return read == 0 ? null : new string(buffer, 0, read);
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
@@ -704,5 +754,7 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         PendingKind Kind,
         TEntity? Entity,
         string Id,
-        IReadOnlyList<PatchOperation>? PatchOperations);
+        IReadOnlyList<PatchOperation>? PatchOperations,
+        DateTimeOffset? SoftDeletedAt = null,
+        TUser? SoftDeletedBy = null);
 }

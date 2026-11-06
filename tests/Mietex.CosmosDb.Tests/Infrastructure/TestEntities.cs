@@ -130,6 +130,10 @@ public sealed class HookTestDbContext : CosmosDbContextBase<TestEntity, TestUser
 
     public Action<TransactionalBatch>? OnPrepareBatch { get; init; }
 
+    public int AppendedOperationCount { get; init; }
+
+    protected override int AdditionalBatchOperationCount => AppendedOperationCount;
+
     protected override void ValidateBatchOperationCount(int pendingOperationCount)
     {
         _validatedCounts.Add(pendingOperationCount);

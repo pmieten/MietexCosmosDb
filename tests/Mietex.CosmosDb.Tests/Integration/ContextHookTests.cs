@@ -69,6 +69,27 @@ public sealed class ContextHookTests : IntegrationContextTestBase
     }
 
     [Fact]
+    public async Task PrepareBatchAppendedOperationsCountAgainstTheBatchLimit()
+    {
+        var partitionKey = NewPartition();
+        var options = Options(partitionKey);
+        var seed = await CreateSeedAsync(options, new TestEntity { Name = "seed" });
+        var limited = Options(partitionKey, current => current with { BatchOperationLimit = 1 });
+
+        await using var context = new HookTestDbContext(limited, TestUser())
+        {
+            OnPrepareBatch = batch => batch.DeleteItem(seed.Id),
+            AppendedOperationCount = 1,
+        };
+
+        context.Add(new TestEntity { Name = "add" });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => context.SaveChangesAsync(Cancellation));
+        Assert.Equal(1, await CountPartitionAsync(partitionKey));
+    }
+
+    [Fact]
     public async Task OnBatchCommittedRunsOnlyOnSuccessfulBatch()
     {
         await using var context = new HookTestDbContext(Options(NewPartition()), TestUser());

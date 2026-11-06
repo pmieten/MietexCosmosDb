@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Azure.Cosmos.Linq;
 
@@ -119,28 +122,85 @@ public static class CosmosQueryLogFormatter
     {
         ArgumentNullException.ThrowIfNull(queryDefinition);
 
-        var query = queryDefinition.QueryText;
         var parameters = queryDefinition.GetQueryParameters();
         if (parameters.Count == 0)
         {
-            return query;
+            return queryDefinition.QueryText;
         }
 
-        // Replace the longest names first so @id does not corrupt @id2.
-        foreach (var (name, value) in parameters.OrderByDescending(parameter => parameter.Name.Length))
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, value) in parameters)
         {
-            var formattedValue = value switch
+            if (!string.IsNullOrEmpty(name))
+            {
+                values[name] = FormatValue(value);
+            }
+        }
+
+        // Single pass: values containing '@name' are never expanded again.
+        return Regex.Replace(
+            queryDefinition.QueryText,
+            "@[A-Za-z_][A-Za-z0-9_]*",
+            match => values.TryGetValue(match.Value, out var value) ? value : match.Value,
+            RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(1));
+    }
+
+    private static string FormatValue(object? value)
+    {
+        try
+        {
+            return value switch
             {
                 null => "null",
-                string text => $"'{text.Replace("'", "''", StringComparison.Ordinal)}'",
+                string text => $"'{EscapeText(text)}'",
                 DateTime dateTime => $"'{dateTime:o}'",
                 DateTimeOffset dateTimeOffset => $"'{dateTimeOffset:o}'",
-                _ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "null",
+                _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "null",
             };
+        }
+        catch (Exception)
+        {
+            return "<unformattable>";
+        }
+    }
 
-            query = query.Replace(name, formattedValue, StringComparison.Ordinal);
+    private static string EscapeText(string text)
+    {
+        var builder = new StringBuilder(text.Length);
+        foreach (var character in text)
+        {
+            switch (character)
+            {
+                case '\'':
+                    builder.Append("''");
+                    break;
+                case '\\':
+                    builder.Append("\\\\");
+                    break;
+                case '\r':
+                    builder.Append("\\r");
+                    break;
+                case '\n':
+                    builder.Append("\\n");
+                    break;
+                case '\t':
+                    builder.Append("\\t");
+                    break;
+                default:
+                    if (char.IsControl(character))
+                    {
+                        builder.Append("\\u").Append(((int)character).ToString("X4", CultureInfo.InvariantCulture));
+                    }
+                    else
+                    {
+                        builder.Append(character);
+                    }
+
+                    break;
+            }
         }
 
-        return query;
+        return builder.ToString();
     }
 }

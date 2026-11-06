@@ -103,7 +103,7 @@ public abstract class CosmosLockingDbContextBase<TEntity, TUser> : CosmosDbConte
     /// <inheritdoc />
     protected override void ValidateBatchOperationCount(int pendingOperationCount)
     {
-        base.ValidateBatchOperationCount(pendingOperationCount + _locks.Count);
+        base.ValidateBatchOperationCount(pendingOperationCount);
     }
 
     /// <inheritdoc />

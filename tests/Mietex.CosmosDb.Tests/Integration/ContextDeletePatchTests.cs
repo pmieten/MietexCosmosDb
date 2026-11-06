@@ -95,6 +95,8 @@ public sealed class ContextDeletePatchTests : IntegrationContextTestBase
         var cached = await context.Entities.FindAsync(entity.Id, Cancellation);
         Assert.Same(tracked, cached);
         Assert.NotEqual(etagBeforeDelete, cached!.Etag);
+        Assert.Equal(DeletedAt, cached.DeletedDate);
+        Assert.Equal(user, cached.DeletedById);
 
         var response = await ReadRawAsync(entity.Id, partitionKey);
         Assert.Equal(DeletedAt, response.Resource.DeletedDate.GetValueOrDefault());
@@ -162,8 +164,16 @@ public sealed class ContextDeletePatchTests : IntegrationContextTestBase
 
         await using (var context = new TestDbContext(options, TestUser()))
         {
+            var tracked = await context.Entities.FindAsync(entity.Id, Cancellation);
+            Assert.NotNull(tracked);
+            Assert.Equal(5, tracked.Value);
+
             context.Patch(entity.Id, [PatchOperation.Set("/Value", 42)]);
             await context.SaveChangesAsync(Cancellation);
+
+            var refreshed = await context.Entities.FindAsync(entity.Id, Cancellation);
+            Assert.NotNull(refreshed);
+            Assert.Equal(42, refreshed.Value);
         }
 
         var response = await ReadRawAsync(entity.Id, partitionKey);
