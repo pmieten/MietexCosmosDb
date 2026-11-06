@@ -23,7 +23,7 @@ jobs:
       matrix:
         tfm: [net8.0, net10.0]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -44,7 +44,7 @@ jobs:
     name: Package and packaging tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-dotnet@v4
