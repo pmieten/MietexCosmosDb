@@ -109,7 +109,9 @@ public static class CosmosLocalEndpointSupport
 
     private static bool IsLoopbackEndpoint(string endpoint)
     {
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) ||
+            string.IsNullOrEmpty(uri.Host))
         {
             return false;
         }
