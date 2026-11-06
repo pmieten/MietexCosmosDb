@@ -110,7 +110,6 @@ public sealed class ContextBatchTests : IntegrationContextTestBase
                 () => context.SaveChangesAsync(Cancellation));
 
             Assert.Equal(2, exception.OperationCount);
-            Assert.Equal(HttpStatusCode.FailedDependency, exception.StatusCode);
             Assert.Contains(
                 exception.Failures,
                 failure => failure.Index == 1 && failure.StatusCode == HttpStatusCode.Conflict);

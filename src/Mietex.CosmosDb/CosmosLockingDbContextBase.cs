@@ -1,3 +1,5 @@
+using Microsoft.Azure.Cosmos;
+
 namespace Mietex.CosmosDb;
 
 /// <summary>
@@ -10,6 +12,9 @@ public abstract class CosmosLockingDbContextBase<TEntity, TUser> : CosmosDbConte
     where TEntity : class, ICosmosEntity
     where TUser : class
 {
+    private readonly Dictionary<string, CosmosPartitionLock> _locks =
+        new(StringComparer.Ordinal);
+
     /// <summary>Initializes a locking context from validated options.</summary>
     /// <param name="options">Context options.</param>
     /// <param name="currentUser">Optional current user for audit stamping.</param>
@@ -22,9 +27,47 @@ public abstract class CosmosLockingDbContextBase<TEntity, TUser> : CosmosDbConte
     /// <param name="resourceKey">Logical resource key scoped to this partition.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The held lock handle.</returns>
-    public Task<CosmosPartitionLock> PerformLockUntilSaveChangesAsync(
+    public async Task<CosmosPartitionLock> PerformLockUntilSaveChangesAsync(
         string resourceKey,
-        CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        CancellationToken cancellationToken = default)
+    {
+        EnsureUsable();
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceKey);
+
+        if (_locks.ContainsKey(resourceKey))
+        {
+            throw new InvalidOperationException(
+                $"The context already holds the partition lease for resource '{resourceKey}'.");
+        }
+
+        var lockOptions = new CosmosPartitionLockOptions
+        {
+            AcquireTimeout = Options.LockAcquireTimeout,
+            LeaseDuration = Options.LockLeaseDuration,
+            CleanupTimeout = Options.LockCleanupTimeout,
+            TimeProvider = Options.TimeProvider,
+        };
+
+        var handle = await CosmosPartitionLock
+            .AcquireAsync(
+                Container,
+                PartitionKey,
+                resourceKey,
+                lockOptions,
+                Logger,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        handle.OnAbandoned = () =>
+        {
+            _locks.Remove(resourceKey);
+            DiscardPendingAndCaches();
+        };
+
+        _locks[resourceKey] = handle;
+        ClearCache();
+        return handle;
+    }
 
     /// <summary>Synchronous wrapper for <see cref="PerformLockUntilSaveChangesAsync"/>.</summary>
     /// <param name="resourceKey">Logical resource key scoped to this partition.</param>
@@ -33,16 +76,97 @@ public abstract class CosmosLockingDbContextBase<TEntity, TUser> : CosmosDbConte
         PerformLockUntilSaveChangesAsync(resourceKey).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public override void Clear() => throw new NotImplementedException();
-
-    /// <inheritdoc />
-    public override Task ClearAsync(CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException();
-
-    /// <inheritdoc />
-    public override ValueTask DisposeAsync()
+    public override void Clear()
     {
+        ReleaseLocksSync();
+        base.Clear();
+    }
+
+    /// <inheritdoc />
+    public override async Task ClearAsync(CancellationToken cancellationToken = default)
+    {
+        await ReleaseLocksAsync().ConfigureAwait(false);
+        await base.ClearAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public override async ValueTask DisposeAsync()
+    {
+        await ReleaseLocksAsync().ConfigureAwait(false);
+        await base.DisposeAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
-        return base.DisposeAsync();
+    }
+
+    /// <inheritdoc />
+    protected override int AdditionalBatchOperationCount => _locks.Count;
+
+    /// <inheritdoc />
+    protected override void ValidateBatchOperationCount(int pendingOperationCount)
+    {
+        base.ValidateBatchOperationCount(pendingOperationCount + _locks.Count);
+    }
+
+    /// <inheritdoc />
+    protected override void PrepareBatch(TransactionalBatch batch)
+    {
+        base.PrepareBatch(batch);
+
+        foreach (var handle in _locks.Values.ToList())
+        {
+            handle.AddReleaseToBatch(batch);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void OnBatchCommitted()
+    {
+        foreach (var handle in _locks.Values)
+        {
+            handle.MarkCommitted();
+        }
+
+        _locks.Clear();
+        base.OnBatchCommitted();
+    }
+
+    /// <inheritdoc />
+    protected override async Task OnSaveFinishedAsync(bool succeeded)
+    {
+        if (!succeeded)
+        {
+            DiscardPendingAndCaches();
+        }
+
+        await ReleaseLocksAsync().ConfigureAwait(false);
+        await base.OnSaveFinishedAsync(succeeded).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        ReleaseLocksSync();
+        base.Dispose(disposing);
+    }
+
+    private async Task ReleaseLocksAsync()
+    {
+        var handles = _locks.Values.ToList();
+        _locks.Clear();
+
+        foreach (var handle in handles)
+        {
+            await handle.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private void ReleaseLocksSync()
+    {
+        var handles = _locks.Values.ToList();
+        _locks.Clear();
+
+        foreach (var handle in handles)
+        {
+            handle.Dispose();
+        }
     }
 }

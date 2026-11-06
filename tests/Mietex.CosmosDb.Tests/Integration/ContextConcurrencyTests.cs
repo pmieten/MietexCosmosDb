@@ -51,7 +51,7 @@ public sealed class ContextConcurrencyTests : IntegrationContextTestBase
         var current = await ReadRawAsync(seed.Id, partitionKey);
         Assert.Equal("v2", current.Resource.Name);
 
-        loser.ClearCache();
+        loser.Clear();
         var fresh = await loser.Entities.FindAsync(seed.Id, Cancellation);
         Assert.NotNull(fresh);
         fresh.Name = "v3";
@@ -90,7 +90,7 @@ public sealed class ContextConcurrencyTests : IntegrationContextTestBase
         var current = await ReadRawAsync(seed.Id, partitionKey);
         Assert.Equal("v2", current.Resource.Name);
 
-        loser.ClearCache();
+        loser.Clear();
         var fresh = await loser.Entities.FindAsync(seed.Id, Cancellation);
         Assert.NotNull(fresh);
         loser.Delete(fresh, useSoftDeleteIfPossible: false);
@@ -129,7 +129,7 @@ public sealed class ContextConcurrencyTests : IntegrationContextTestBase
         var current = await ReadRawAsync(seed.Id, partitionKey);
         Assert.Equal("v2", current.Resource.Name);
 
-        loser.ClearCache();
+        loser.Clear();
         var fresh = await loser.Entities.FindAsync(seed.Id, Cancellation);
         Assert.NotNull(fresh);
         loser.Patch(fresh, [PatchOperation.Set("/Name", "fresh-patch")]);

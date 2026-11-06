@@ -106,6 +106,6 @@ public sealed class ContextSerializerTests : IntegrationContextTestBase
         {
         }
 
-        public CosmosDbSet<SerializerEntity> Entities { get; set; } = null!;
+        public CosmosDbSet<SerializerEntity> Entities => Set<SerializerEntity>();
     }
 }

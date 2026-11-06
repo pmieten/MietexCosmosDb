@@ -111,5 +111,72 @@ public sealed record CosmosDbOptions
     /// <summary>Validates the option combination.</summary>
     /// <exception cref="ArgumentException">A required value is empty or a value is out of range.</exception>
     /// <exception cref="InvalidOperationException">Two mutually exclusive options are set.</exception>
-    public void Validate() => throw new NotImplementedException();
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(DatabaseName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ContainerName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(PartitionKey);
+
+        if (Client is not null && ClientProvider is not null)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(Client)} and {nameof(ClientProvider)} cannot be set together.");
+        }
+
+        if (Client is null && string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            throw new ArgumentException(
+                $"{nameof(ConnectionString)} is required unless {nameof(Client)} is supplied.",
+                nameof(ConnectionString));
+        }
+
+        if (Serializer is not null && SerializerSettings is not null)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(Serializer)} and {nameof(SerializerSettings)} cannot be set together.");
+        }
+
+        if (UpdateMode == CosmosDbUpdateMode.Upsert &&
+            ConcurrencyMode == CosmosDbConcurrencyMode.MatchEtag)
+        {
+            throw new InvalidOperationException(
+                "Upsert cannot be combined with MatchEtag. Use Replace when an ETag precondition is required.");
+        }
+
+        if (BatchOperationLimit is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(BatchOperationLimit),
+                BatchOperationLimit,
+                "BatchOperationLimit must be between 1 and 100.");
+        }
+
+        if (TimeProvider is null)
+        {
+            throw new ArgumentNullException(nameof(TimeProvider));
+        }
+
+        if (!Enum.IsDefined(ConsistencyLevel))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ConsistencyLevel),
+                ConsistencyLevel,
+                "The consistency level is not defined.");
+        }
+
+        ValidatePositive(LockAcquireTimeout, nameof(LockAcquireTimeout));
+        ValidatePositive(LockLeaseDuration, nameof(LockLeaseDuration));
+        ValidatePositive(LockCleanupTimeout, nameof(LockCleanupTimeout));
+    }
+
+    private static void ValidatePositive(TimeSpan value, string propertyName)
+    {
+        if (value <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                propertyName,
+                value,
+                $"{propertyName} must be greater than zero.");
+        }
+    }
 }

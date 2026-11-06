@@ -8,13 +8,15 @@
 
 | Item | Value |
 | --- | --- |
-| Phase | 1 — analysis and spec |
+| Phase | 5 — implementation (red suite ready) |
 | Branch | `main` |
 | Package | `Mietex.CosmosDb` (MIT, `net8.0;net10.0`) |
 | Source projects | READ-ONLY: `legacy host root\legacy host`, `legacy host root\legacy host` |
 | Test strategy | Real Cosmos DB vNext emulator in Docker; SDK `Container` mocks forbidden |
 | Emulator used locally | `cosmos-legacy host-Dev`, https://localhost:8281 |
-| Next action | Scaffold repository and solution, then write failing tests |
+| Test count | 146 discovered (`net10.0`), 61 unit + 85 integration |
+| Last red run | Library API still throws `NotImplementedException`; expected red |
+| Next action | Implement contracts/options/provider/serializer/local endpoint/feed, then context and locking pipeline |
 
 ## TODOs
 
@@ -32,23 +34,23 @@
 - [ ] Publish the spec as a GitHub issue with `ready-for-agent` label.
 
 ### 2. Repository scaffold
-- [ ] `global.json`, `Directory.Build.props`, `Directory.Packages.props`, `.editorconfig`, `.gitignore`.
-- [ ] `Mietex.CosmosDb.sln` with `src/Mietex.CosmosDb` and `tests/Mietex.CosmosDb.Tests`.
-- [ ] `LICENSE` (MIT), `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`.
-- [ ] Public API stubs that compile but throw `NotImplementedException` (red TDD baseline).
+- [x] `global.json`, `Directory.Build.props`, `Directory.Packages.props`, `.editorconfig`, `.gitignore`.
+- [x] `Mietex.CosmosDb.slnx` with `src/Mietex.CosmosDb` and `tests/Mietex.CosmosDb.Tests`.
+- [x] `LICENSE` (MIT), `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`.
+- [x] Public API stubs that compile but throw `NotImplementedException` (red TDD baseline).
 
 ### 3. TDD — write tests first
-- [ ] Emulator fixture: connection string env var, unique database, container helper, readiness retry.
-- [ ] Unit tests: serializer, settings factory, local endpoint, options validation, query formatter.
-- [ ] Integration tests: context CRUD/batch/audit/soft delete/query/cache/hooks.
-- [ ] Integration tests: partition lock acquisition/takeover/fencing/cleanup.
-- [ ] Integration tests: locking context lifecycle.
+- [x] Emulator fixture: connection string env var, unique database, container helper, readiness retry.
+- [x] Unit tests: serializer, settings factory, local endpoint, options validation, query formatter.
+- [x] Integration tests: context CRUD/batch/audit/soft delete/query/cache/hooks/concurrency.
+- [x] Integration tests: partition lock acquisition/takeover/fencing/cleanup.
+- [x] Integration tests: locking context lifecycle.
 - [ ] Packaging test: inspect `.nupkg` TFMs, docs, licence, symbols.
-- [ ] Run the suite: all new tests fail for the expected reason (red).
+- [x] Run the suite: all new tests fail for the expected reason (red).
 
 ### 4. Test review #1
-- [ ] Independent review of test quality, seam usage, determinism, forbidden mocks.
-- [ ] Apply fixes.
+- [x] Independent review of test quality, seam usage, determinism, forbidden mocks.
+- [x] Apply fixes (blockers B1–B3 and high-value should-fix items; report in `docs/reviews/01-test-review.md`).
 
 ### 5. Implementation
 - [ ] Contracts, options validation, client provider.

@@ -62,9 +62,9 @@ public sealed class TestDbContext : CosmosDbContextBase<TestEntity, TestUser>
     {
     }
 
-    public CosmosDbSet<TestEntity> Entities { get; set; } = null!;
+    public CosmosDbSet<TestEntity> Entities => Set<TestEntity>();
 
-    public CosmosDbSet<OtherTestEntity> Others { get; set; } = null!;
+    public CosmosDbSet<OtherTestEntity> Others => Set<OtherTestEntity>();
 }
 
 public sealed class UnmappedEtagEntity : ICosmosEntity
@@ -91,7 +91,7 @@ public sealed class UnmappedEtagDbContext : CosmosDbContextBase<UnmappedEtagEnti
     {
     }
 
-    public CosmosDbSet<UnmappedEtagEntity> Entities { get; set; } = null!;
+    public CosmosDbSet<UnmappedEtagEntity> Entities => Set<UnmappedEtagEntity>();
 }
 
 public sealed class LockingTestDbContext : CosmosLockingDbContextBase<TestEntity, TestUser>
@@ -101,7 +101,7 @@ public sealed class LockingTestDbContext : CosmosLockingDbContextBase<TestEntity
     {
     }
 
-    public CosmosDbSet<TestEntity> Entities { get; set; } = null!;
+    public CosmosDbSet<TestEntity> Entities => Set<TestEntity>();
 }
 
 public sealed class HookTestDbContext : CosmosDbContextBase<TestEntity, TestUser>
@@ -114,7 +114,7 @@ public sealed class HookTestDbContext : CosmosDbContextBase<TestEntity, TestUser
     {
     }
 
-    public CosmosDbSet<TestEntity> Entities { get; set; } = null!;
+    public CosmosDbSet<TestEntity> Entities => Set<TestEntity>();
 
     public IReadOnlyList<int> ValidatedCounts => _validatedCounts;
 
