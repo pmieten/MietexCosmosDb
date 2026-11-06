@@ -8,16 +8,16 @@
 
 | Item | Value |
 | --- | --- |
-| Phase | 6 — implementation review |
+| Phase | 9 — CI/CD verification |
 | Branch | `main` |
 | Package | `Mietex.CosmosDb` (MIT, `net8.0;net10.0`) |
 | Source projects | READ-ONLY: `legacy host root\legacy host`, `legacy host root\legacy host` |
 | Test strategy | Real Cosmos DB vNext emulator in Docker; SDK `Container` mocks forbidden |
 | Emulator used locally | `cosmos-legacy host-Dev`, https://localhost:8281 |
 | Test count | 165 passing (`net10.0`): 84 unit + 80 integration + 1 smoke |
-| Last green run | `net10.0` full suite green (165); `net8.0` unit suite green (84) |
+| Last green run | `net10.0` full suite green (167); `net8.0` unit suite green (84) |
 | Emulator | Real vNext emulator, real containers, no SDK mocks |
-| Next action | Packaging test, docs, CI/CD, then human-in-the-loop checkpoint |
+| Next action | Verify GitHub Pages deploy, then human-in-the-loop checkpoint and release tag |
 
 ## TODOs
 
@@ -61,8 +61,8 @@
 - [x] Run the suite until green on the emulator.
 
 ### 6. Test review #2
-- [ ] Independent review after implementation (coverage gaps, edge cases, flakiness).
-- [ ] Apply fixes and re-run.
+- [x] Independent review after implementation (coverage gaps, edge cases, flakiness).
+- [x] Apply fixes and re-run.
 
 ### 7. Human in the loop
 - [ ] Present the public API, test results, and remaining risks for approval.
@@ -120,6 +120,9 @@ Source: [docs/reviews/02-implementation-review.md](docs/reviews/02-implementatio
 | --- | --- | --- |
 | 2026-11-05 | 0 | Skills installed; spec decisions confirmed; emulator verified on :8281. |
 | 2026-11-05 | 1 | Spec written and open questions resolved. |
+| 2026-11-06 | 2-4 | Scaffold, 167-test red suite, independent test review, fixes. |
+| 2026-11-06 | 5-6 | Implemented library; full suite green; independent implementation review; blockers and should-fix items fixed. |
+| 2026-11-06 | 8-9 | DocFX site, migration guides, release runbook, CI/Integration/Docs/CodeQL/publish workflows pushed. CI and Integration green; Pages deploy verification pending. |
 
 ## Risks / watch list
 
