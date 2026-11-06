@@ -108,5 +108,8 @@ public sealed record CosmosDbOptions
     /// <summary>Gets how long lock cleanup may take.</summary>
     public TimeSpan LockCleanupTimeout { get; init; } = TimeSpan.FromSeconds(5);
 
-    internal void Validate() => throw new NotImplementedException();
+    /// <summary>Validates the option combination.</summary>
+    /// <exception cref="ArgumentException">A required value is empty or a value is out of range.</exception>
+    /// <exception cref="InvalidOperationException">Two mutually exclusive options are set.</exception>
+    public void Validate() => throw new NotImplementedException();
 }
