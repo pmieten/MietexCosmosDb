@@ -10,7 +10,7 @@ support, and ETag-fenced partition locks.
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pmieten.github.io/MietexCosmosDb/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Status: pre-release. The API is being stabilised; see [PLAN.md](PLAN.md) and the
+> Status: 0.1.0 published on NuGet. The API is being stabilised; see [PLAN.md](PLAN.md) and the
 > [engineering spec](docs/specs/0001-mietex-cosmosdb.md).
 
 ## Why
