@@ -8,6 +8,11 @@ namespace Mietex.CosmosDb.Tests.Integration;
 [Trait("Category", "Integration")]
 public sealed class ContextHookTests : IntegrationContextTestBase
 {
+    private static readonly int[] ThreeOperations = [3];
+    private static readonly bool[] TwoSuccessfulSaves = [true, true];
+    private static readonly bool[] SuccessThenFailure = [true, true, false];
+    private static readonly bool[] OneSuccessfulSave = [true];
+
     public ContextHookTests(CosmosEmulatorFixture emulator)
         : base(emulator)
     {
@@ -35,12 +40,12 @@ public sealed class ContextHookTests : IntegrationContextTestBase
 
         await context.SaveChangesAsync(Cancellation);
 
-        Assert.Equal(new[] { 3 }, context.ValidatedCounts);
+        Assert.Equal(ThreeOperations, context.ValidatedCounts);
 
         await context.SaveChangesAsync(Cancellation);
 
         Assert.Single(context.ValidatedCounts);
-        Assert.Equal(new[] { true, true }, context.SaveFinished);
+        Assert.Equal(TwoSuccessfulSaves, context.SaveFinished);
     }
 
     [Fact]
@@ -124,7 +129,7 @@ public sealed class ContextHookTests : IntegrationContextTestBase
         context.Add(new TestEntity { Id = duplicateId });
         await Assert.ThrowsAsync<CosmosBatchException>(() => context.SaveChangesAsync(Cancellation));
 
-        Assert.Equal(new[] { true, true, false }, context.SaveFinished);
+        Assert.Equal(SuccessThenFailure, context.SaveFinished);
     }
 
     [Fact]
@@ -143,7 +148,7 @@ public sealed class ContextHookTests : IntegrationContextTestBase
 
         Assert.Null(exception);
         Assert.Equal(1, context.CommittedCalls);
-        Assert.Equal(new[] { true }, context.SaveFinished);
+        Assert.Equal(OneSuccessfulSave, context.SaveFinished);
 
         var response = await ReadRawAsync(entity.Id, partitionKey);
         Assert.Equal("committed", response.Resource.Name);
@@ -164,7 +169,7 @@ public sealed class ContextHookTests : IntegrationContextTestBase
         var exception = await Record.ExceptionAsync(() => context.SaveChangesAsync(Cancellation));
 
         Assert.Null(exception);
-        Assert.Equal(new[] { true }, context.SaveFinished);
+        Assert.Equal(OneSuccessfulSave, context.SaveFinished);
         var response = await ReadRawAsync(entity.Id, partitionKey);
         Assert.Equal("saved", response.Resource.Name);
     }
