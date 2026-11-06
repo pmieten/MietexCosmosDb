@@ -8,7 +8,7 @@
 
 | Item | Value |
 | --- | --- |
-| Phase | 9 — CI/CD verification |
+| Phase | 9 — CI/CD verified; release approval pending |
 | Branch | `main` |
 | Package | `Mietex.CosmosDb` (MIT, `net8.0;net10.0`) |
 | Source projects | READ-ONLY: `legacy host root\legacy host`, `legacy host root\legacy host` |
@@ -17,7 +17,7 @@
 | Test count | 165 passing (`net10.0`): 84 unit + 80 integration + 1 smoke |
 | Last green run | `net10.0` full suite green (167); `net8.0` unit suite green (84) |
 | Emulator | Real vNext emulator, real containers, no SDK mocks |
-| Next action | Verify GitHub Pages deploy, then human-in-the-loop checkpoint and release tag |
+| Next action | Human approval, then tag `v0.1.0` to trigger NuGet trusted publishing |
 
 ## TODOs
 
@@ -81,7 +81,7 @@
 - [x] Dependabot, CodeQL, issue/PR templates.
 - [x] NuGet trusted-publishing policy instructions (manual account step).
 - [x] Dry-run pack locally and validate the `.nupkg`.
-- [ ] Commit and push repository; verify workflows on GitHub.
+- [x] Commit and push repository; verify workflows on GitHub (CI, Integration, Docs, CodeQL green; Pages live).
 
 ## Review #2 remediation TODO
 
