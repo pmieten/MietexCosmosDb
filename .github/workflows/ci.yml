@@ -58,7 +58,7 @@ jobs:
           -c Release -f net10.0 --filter Category=Packaging
       - name: Pack
         run: dotnet pack src/Mietex.CosmosDb/Mietex.CosmosDb.csproj -c Release -o artifacts --no-restore
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nuget-packages
           path: artifacts/*.nupkg
