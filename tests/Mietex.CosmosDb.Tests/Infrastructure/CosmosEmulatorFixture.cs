@@ -58,7 +58,7 @@ public sealed class CosmosEmulatorFixture : IAsyncLifetime
                 SkipReason = null;
                 return;
             }
-            catch (Exception ex) when (ex is CosmosException or HttpRequestException or TaskCanceledException)
+            catch (Exception ex) when (ex is CosmosException or HttpRequestException or TaskCanceledException or ArgumentException or FormatException or UriFormatException)
             {
                 lastError = ex;
                 try
@@ -74,7 +74,9 @@ public sealed class CosmosEmulatorFixture : IAsyncLifetime
 
         IsAvailable = false;
         SkipReason =
-            $"Cosmos DB emulator is not reachable at the configured endpoint. Start the vNext container or set MIETEX_COSMOSDB_EMULATOR_CONNECTION_STRING. Last error: {lastError?.GetType().Name}: {lastError?.Message}";
+            "Cosmos DB emulator is not reachable at the configured endpoint. " +
+            "Start the vNext container or set MIETEX_COSMOSDB_EMULATOR_CONNECTION_STRING. " +
+            $"Last error type: {lastError?.GetType().Name ?? "none"}.";
     }
 
     public async ValueTask<Container> CreateContainerAsync(string name)
@@ -151,7 +153,7 @@ public sealed class CosmosEmulatorFixture : IAsyncLifetime
             return $"mietex-tests-{runId}";
         }
 
-        return $"mietex-tests-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..32];
+        return $"mietex-tests-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8]}";
     }
 
     private static string ResolveConnectionString()

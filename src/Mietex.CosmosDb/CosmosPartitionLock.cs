@@ -62,6 +62,7 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
     private readonly TimeSpan _cleanupTimeout;
     private readonly ILogger? _logger;
     private string? _etag;
+    private bool _releaseAdded;
     private bool _committed;
     private bool _disposed;
 
@@ -174,7 +175,6 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
                         partitionKeyValue,
                         lockId,
                         lease,
-                        now,
                         options,
                         linkedSource.Token).ConfigureAwait(false) is { } replacement)
                     {
@@ -213,7 +213,7 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(batch);
 
-        if (_disposed || _committed)
+        if (_disposed || _committed || _releaseAdded)
         {
             throw new InvalidOperationException("The partition lease has already been released or committed.");
         }
@@ -229,6 +229,7 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
             throw new InvalidOperationException("The partition lease has no ETag and cannot be released.");
         }
 
+        _releaseAdded = true;
         batch.DeleteItem(
             _lockId,
             new TransactionalBatchItemRequestOptions { IfMatchEtag = _etag });
@@ -319,8 +320,16 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
         DateTimeOffset expiresAt,
         string etag,
         CosmosPartitionLockOptions options,
-        ILogger? logger) =>
-        new(
+        ILogger? logger)
+    {
+        if (string.IsNullOrEmpty(etag))
+        {
+            throw new InvalidOperationException(
+                $"The partition lease '{lockId}' was acquired without an ETag. " +
+                "The lease cannot be fenced safely.");
+        }
+
+        return new CosmosPartitionLock(
             container,
             partitionKey,
             lockId,
@@ -330,13 +339,13 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
             options.TimeProvider,
             options.CleanupTimeout,
             logger);
+    }
 
     private static async Task<ItemResponse<CosmosLockLease>?> TryTakeOverAsync(
         Container container,
         PartitionKey partitionKey,
         string lockId,
         CosmosLockLease replacementLease,
-        DateTimeOffset now,
         CosmosPartitionLockOptions options,
         CancellationToken cancellationToken)
     {
@@ -361,10 +370,13 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
                     "Refusing to overwrite it; choose a different resource key or clean up the conflicting document.");
             }
 
+            var now = options.TimeProvider.GetUtcNow();
             if (lease.ExpiresAt > now)
             {
                 return null;
             }
+
+            replacementLease.ExpiresAt = now + options.LeaseDuration;
 
             try
             {
@@ -386,7 +398,7 @@ public sealed class CosmosPartitionLock : IDisposable, IAsyncDisposable
                 return null;
             }
         }
-        catch (CosmosException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        catch (CosmosException exception) when (IsRetryable(exception.StatusCode))
         {
             return null;
         }

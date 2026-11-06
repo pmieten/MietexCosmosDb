@@ -162,6 +162,32 @@ public sealed class LockingContextLockTests : LockingIntegrationTestBase
     }
 
     [Fact]
+    public async Task ExpiredLocalHandleFailsFastBeforeAnyWrite()
+    {
+        var partitionKey = NewPartition();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var options = ContextOptions(
+            partitionKey,
+            acquireTimeout: TimeSpan.FromSeconds(2),
+            leaseDuration: TimeSpan.FromSeconds(1),
+            timeProvider: clock);
+        var resourceKey = "resource-" + Guid.NewGuid().ToString("N");
+
+        await using var context = new LockingTestDbContext(options, TestUser());
+        var handle = await context.PerformLockUntilSaveChangesAsync(resourceKey, Cancellation);
+        context.Add(new TestEntity { Name = "must-not-write" });
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => context.SaveChangesAsync(Cancellation));
+
+        Assert.Contains("expired", exception.Message);
+        Assert.Equal(0, await CountPartitionAsync(partitionKey));
+        await AssertLeaseAbsentAsync(handle.LockId, partitionKey);
+    }
+
+    [Fact]
     public async Task DuplicateResourceKeyInOneContextIsRejected()
     {
         var partitionKey = NewPartition();
@@ -319,6 +345,31 @@ public sealed class LockingContextLockTests : LockingIntegrationTestBase
         }
 
         Assert.Equal(99, await CountPartitionAsync(partitionKey));
+    }
+
+    [Fact]
+    public async Task CanceledClearAsyncDoesNotLeaveHalfClearedState()
+    {
+        var partitionKey = NewPartition();
+        var options = ContextOptions(partitionKey);
+        var resourceKey = "resource-" + Guid.NewGuid().ToString("N");
+
+        await using var context = new LockingTestDbContext(options, TestUser());
+        var handle = await context.PerformLockUntilSaveChangesAsync(resourceKey, Cancellation);
+        context.Add(new TestEntity { Name = "pending" });
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => context.ClearAsync(cancellation.Token));
+
+        await AssertLeaseExistsAsync(handle.LockId, partitionKey);
+
+        await context.ClearAsync(Cancellation);
+        await AssertLeaseAbsentAsync(handle.LockId, partitionKey);
+        await context.SaveChangesAsync(Cancellation);
+        Assert.Equal(0, await CountPartitionAsync(partitionKey));
     }
 
     [Fact]

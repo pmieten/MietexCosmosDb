@@ -287,6 +287,27 @@ public sealed class PartitionLockAcquireTests : LockingIntegrationTestBase
     }
 
     [Fact]
+    public async Task AddReleaseToBatchIsSingleUse()
+    {
+        var partitionKey = NewPartition();
+        var resourceKey = "resource-" + Guid.NewGuid().ToString("N");
+        var handle = await CosmosPartitionLock.AcquireAsync(
+            Container,
+            partitionKey,
+            resourceKey,
+            LockOptions(),
+            cancellationToken: Cancellation);
+
+        var batch = Container.CreateTransactionalBatch(new PartitionKey(partitionKey));
+        handle.AddReleaseToBatch(batch);
+
+        Assert.Throws<InvalidOperationException>(() => handle.AddReleaseToBatch(batch));
+
+        await handle.DisposeAsync();
+        await AssertLeaseAbsentAsync(handle.LockId, partitionKey);
+    }
+
+    [Fact]
     public async Task AcquisitionRefusesToOverwriteANonLeaseDocumentWithTheLockId()
     {
         var partitionKey = NewPartition();

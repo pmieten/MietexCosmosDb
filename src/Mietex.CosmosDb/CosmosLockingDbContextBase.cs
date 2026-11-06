@@ -58,6 +58,21 @@ public abstract class CosmosLockingDbContextBase<TEntity, TUser> : CosmosDbConte
                 cancellationToken)
             .ConfigureAwait(false);
 
+        try
+        {
+            EnsureUsable();
+            if (_locks.ContainsKey(resourceKey))
+            {
+                throw new InvalidOperationException(
+                    $"The context already holds the partition lease for resource '{resourceKey}'.");
+            }
+        }
+        catch
+        {
+            await handle.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
         handle.OnAbandoned = () =>
         {
             _locks.Remove(resourceKey);
@@ -85,8 +100,9 @@ public abstract class CosmosLockingDbContextBase<TEntity, TUser> : CosmosDbConte
     /// <inheritdoc />
     public override async Task ClearAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         await ReleaseLocksAsync().ConfigureAwait(false);
-        await base.ClearAsync(cancellationToken).ConfigureAwait(false);
+        await base.ClearAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

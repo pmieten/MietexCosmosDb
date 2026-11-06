@@ -67,6 +67,16 @@ public sealed class TestDbContext : CosmosDbContextBase<TestEntity, TestUser>
     public CosmosDbSet<OtherTestEntity> Others => Set<OtherTestEntity>();
 }
 
+public sealed class AutoSetDbContext : CosmosDbContextBase<TestEntity, TestUser>
+{
+    public AutoSetDbContext(CosmosDbOptions options, TestUser? currentUser = null)
+        : base(options, currentUser)
+    {
+    }
+
+    public CosmosDbSet<TestEntity> Entities { get; set; } = null!;
+}
+
 public sealed class UnmappedEtagEntity : ICosmosEntity
 {
     [JsonProperty("id")]
