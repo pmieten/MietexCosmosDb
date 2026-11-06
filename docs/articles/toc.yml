@@ -1,0 +1,12 @@
+- name: Getting started
+  href: getting-started.md
+- name: Contexts and sets
+  href: contexts-and-sets.md
+- name: Auditing, delete, and patch
+  href: auditing-delete.md
+- name: Partition locks
+  href: partition-locks.md
+- name: Serialization
+  href: serialization.md
+- name: Local emulator
+  href: emulator.md

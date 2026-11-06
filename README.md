@@ -6,6 +6,7 @@ support, and ETag-fenced partition locks.
 
 [![NuGet](https://img.shields.io/nuget/v/Mietex.CosmosDb.svg)](https://www.nuget.org/packages/Mietex.CosmosDb)
 [![CI](https://github.com/pmieten/MietexCosmosDb/actions/workflows/ci.yml/badge.svg)](https://github.com/pmieten/MietexCosmosDb/actions/workflows/ci.yml)
+[![Integration](https://github.com/pmieten/MietexCosmosDb/actions/workflows/integration.yml/badge.svg)](https://github.com/pmieten/MietexCosmosDb/actions/workflows/integration.yml)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://pmieten.github.io/MietexCosmosDb/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -30,13 +31,21 @@ Targets `net8.0` and `net10.0`.
 
 ```csharp
 using Mietex.CosmosDb;
+using Newtonsoft.Json;
 
 public sealed class Order : ICosmosEntity, IAuditEntity<string>
 {
+    [JsonProperty("id")]
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    [JsonProperty("PartitionKey")]
     public string PartitionKey { get; set; } = "";
+
     public string Discriminator { get; set; } = nameof(Order);
+
+    [JsonProperty("_etag")]
     public string? Etag { get; set; }
+
     public bool IsNew() => string.IsNullOrWhiteSpace(Etag);
 
     public DateTimeOffset CreatedDate { get; set; }
@@ -68,6 +77,53 @@ var order = await db.Orders.FindAsync("id");
 
 See the [documentation](https://pmieten.github.io/MietexCosmosDb/) for auditing, batching, soft
 delete, and distributed locks.
+
+## Distributed locks
+
+```csharp
+await using var db = new AppDbContext(options);
+var lease = await db.PerformLockUntilSaveChangesAsync("tenant-a/orders");
+
+var order = await db.Orders.FindAsync(orderId);
+order!.Status = "shipped";
+db.Add(order);
+await db.SaveChangesAsync();
+```
+
+The lease is released in the same transactional batch as the business writes. A takeover fences the
+old owner with either a local `InvalidOperationException` (already expired) or a
+`CosmosBatchException` with a `412` (server-side takeover). See
+[partition locks](https://pmieten.github.io/MietexCosmosDb/articles/partition-locks.html).
+
+## Testing
+
+Tests run against a real Cosmos DB vNext emulator. Cosmos SDK types are never mocked.
+
+```shell
+dotnet test -f net10.0 --filter Category=Unit
+dotnet test -f net10.0 --filter Category=Integration
+dotnet test -f net10.0 --filter Category=Packaging
+```
+
+Integration tests skip when the emulator is unreachable; CI turns a skipped integration run into a
+failure. The emulator contract is documented in
+[docs/articles/emulator.md](docs/articles/emulator.md).
+
+## Migrating
+
+- [legacy host migration guide](docs/migration/eorderflow.md)
+- [legacy host migration guide](docs/migration/ms-dc.md)
+- [Engineering spec](docs/specs/0001-mietex-cosmosdb.md)
+
+Keep the existing JSON property names (`id`, `_etag`, and the partition-key member) and the
+container partition key path. The C# property is named `PartitionKey`, but that does not require a
+storage migration.
+
+## Releasing
+
+Versioning uses MinVer tags. NuGet publishing uses Trusted Publishing over GitHub OIDC and
+`NuGet/login@v1`; no long-lived NuGet API key is stored. See
+[docs/release.md](docs/release.md).
 
 ## Security note
 

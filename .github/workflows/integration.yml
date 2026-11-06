@@ -1,0 +1,70 @@
+name: Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator-tests:
+    name: Cosmos vNext emulator (net10.0)
+    runs-on: ubuntu-latest
+    services:
+      cosmos:
+        image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest
+        ports:
+          - 8281:8281
+          - 8280:8080
+          - 1234:1234
+        env:
+          ENABLE_EXPLORER: "false"
+    env:
+      MIETEX_COSMOSDB_EMULATOR_PORT: "8281"
+      MIETEX_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore Mietex.CosmosDb.slnx
+      - name: Wait for emulator
+        shell: bash
+        run: |
+          for attempt in $(seq 1 90); do
+            if curl -k -sS --max-time 2 https://localhost:8281/ >/dev/null; then
+              echo "Cosmos emulator is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Cosmos emulator did not become ready in time."
+          exit 1
+      - name: Integration tests
+        run: >
+          dotnet test tests/Mietex.CosmosDb.Tests/Mietex.CosmosDb.Tests.csproj
+          -c Release -f net10.0 --no-restore
+          --filter Category=Integration
+          --logger "trx;LogFileName=integration.trx"
+      - name: Reject skipped integration tests
+        if: always()
+        shell: bash
+        run: |
+          trx="$(find . -name integration.trx -print -quit)"
+          if [ -z "$trx" ]; then
+            echo "Integration TRX file was not produced."
+            exit 1
+          fi
+          if grep -q 'outcome="NotExecuted"' "$trx"; then
+            echo "Integration tests were skipped; CI must not silently disable them."
+            exit 1
+          fi

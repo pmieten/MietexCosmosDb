@@ -68,19 +68,19 @@
 - [ ] Present the public API, test results, and remaining risks for approval.
 
 ### 8. Documentation
-- [ ] README quick start and concepts.
-- [ ] DocFX site: index, articles, API metadata, toc.
-- [ ] Migration guides for legacy host and legacy host.
-- [ ] Release/versioning/NuGet trusted-publishing runbook.
+- [x] README quick start and concepts.
+- [x] DocFX site: index, articles, API metadata, toc.
+- [x] Migration guides for legacy host and legacy host.
+- [x] Release/versioning/NuGet trusted-publishing runbook.
 
 ### 9. CI/CD and publishing
-- [ ] CI workflow: build + unit tests on net8/net10 + pack.
-- [ ] Integration workflow: Cosmos emulator service container + net10 suite.
-- [ ] Docs workflow: DocFX build + GitHub Pages deploy.
-- [ ] Publish workflow: tag, MinVer, `NuGet/login@v1` OIDC, push + provenance.
-- [ ] Dependabot, CodeQL, issue/PR templates.
-- [ ] NuGet trusted-publishing policy instructions (manual account step).
-- [ ] Dry-run pack locally and validate the `.nupkg`.
+- [x] CI workflow: build + unit tests on net8/net10 + pack.
+- [x] Integration workflow: Cosmos emulator service container + net10 suite.
+- [x] Docs workflow: DocFX build + GitHub Pages deploy.
+- [x] Publish workflow: tag, MinVer, `NuGet/login@v1` OIDC, push + provenance.
+- [x] Dependabot, CodeQL, issue/PR templates.
+- [x] NuGet trusted-publishing policy instructions (manual account step).
+- [x] Dry-run pack locally and validate the `.nupkg`.
 - [ ] Commit and push repository; verify workflows on GitHub.
 
 ## Review #2 remediation TODO
@@ -112,7 +112,7 @@ Source: [docs/reviews/02-implementation-review.md](docs/reviews/02-implementatio
 - [x] S12: migration docs for JSON property names/container path and `_etag`; add storage-shape tests.
 - [x] S13: define request-level Cosmos exception contract; wrap or document.
 - [x] S14: strengthen weak tests (hook invocation, N-way timing, serializer factory list, smoke trait).
-- [ ] S15: packaging test, CI workflows, DocFX, migration guides (next phase).
+- [x] S15: packaging test, CI workflows, DocFX, migration guides.
 
 ## Phase log
 

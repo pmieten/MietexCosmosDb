@@ -9,8 +9,8 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <MinVerTagPrefix>v</MinVerTagPrefix>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
 
     <Authors>Pawel Mieten</Authors>
     <Company>Mietex</Company>

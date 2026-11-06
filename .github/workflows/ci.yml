@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build and unit tests (${{ matrix.tfm }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tfm: [net8.0, net10.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Restore
+        run: dotnet restore Mietex.CosmosDb.slnx
+      - name: Build library
+        run: dotnet build src/Mietex.CosmosDb/Mietex.CosmosDb.csproj -c Release --no-restore
+      - name: Unit tests
+        run: >
+          dotnet test tests/Mietex.CosmosDb.Tests/Mietex.CosmosDb.Tests.csproj
+          -c Release -f ${{ matrix.tfm }} --no-restore
+          --filter Category=Unit
+          --logger "trx;LogFileName=unit-${{ matrix.tfm }}.trx"
+
+  pack:
+    name: Package and packaging tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore Mietex.CosmosDb.slnx
+      - name: Packaging tests
+        run: >
+          dotnet test tests/Mietex.CosmosDb.Tests/Mietex.CosmosDb.Tests.csproj
+          -c Release -f net10.0 --filter Category=Packaging
+      - name: Pack
+        run: dotnet pack src/Mietex.CosmosDb/Mietex.CosmosDb.csproj -c Release -o artifacts --no-restore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/*.nupkg
+          if-no-files-found: error

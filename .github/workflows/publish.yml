@@ -1,0 +1,66 @@
+name: Publish NuGet
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional explicit package version (leave empty to use MinVer)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: nuget-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack and publish
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore Mietex.CosmosDb.slnx
+      - name: Unit tests
+        run: >
+          dotnet test tests/Mietex.CosmosDb.Tests/Mietex.CosmosDb.Tests.csproj
+          -c Release -f net10.0 --no-restore --filter Category=Unit
+      - name: Pack
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            dotnet pack src/Mietex.CosmosDb/Mietex.CosmosDb.csproj \
+              -c Release -o artifacts --no-restore \
+              -p:PackageVersion="${{ inputs.version }}"
+          else
+            dotnet pack src/Mietex.CosmosDb/Mietex.CosmosDb.csproj \
+              -c Release -o artifacts --no-restore
+          fi
+      - name: NuGet trusted login
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: pmieten
+      - name: Push package and symbols
+        shell: bash
+        run: |
+          dotnet nuget push artifacts/*.nupkg \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+          dotnet nuget push artifacts/*.snupkg \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

@@ -33,3 +33,6 @@ Thumbs.db
 
 ## Local test/emulator data
 cosmos-data/
+
+## Local tool installs
+.tools/
