@@ -123,7 +123,7 @@ Source: [the independent implementation review](the independent implementation r
 | 2026-11-06 | 2-4 | Scaffold, 167-test red suite, independent test review, fixes. |
 | 2026-11-06 | 5-6 | Implemented library; full suite green; independent implementation review; blockers and should-fix items fixed. |
 | 2026-11-06 | 8-9 | DocFX site, release runbook, CI/Integration/Docs/CodeQL workflows pushed and green. Public repo recreated with clean history. Tag `v0.1.0` pushed; publish run failed only at NuGet trusted login because no matching trust policy exists yet. |
-| 2026-11-06 | 10 | NuGet trusted-publishing policy created and active for `pmieten/MietexCosmosDb`, workflow `publish.yml`, environment `release`. Rerun of the publish workflow succeeded: `Mietex.CosmosDb.0.1.0.nupkg` and `.snupkg` pushed. Package page live at https://www.nuget.org/packages/Mietex.CosmosDb/0.1.0; flat-container indexing still in progress. |
+| 2026-11-06 | 10 | NuGet trusted-publishing policy created and active for `pmieten/MietexCosmosDb`, workflow `publish.yml`, environment `release`. Rerun of the publish workflow succeeded: `Mietex.CosmosDb.0.1.0.nupkg` and `.snupkg` pushed. Package page live at https://www.nuget.org/packages/Mietex.CosmosDb/0.1.0; flat-container index now lists `0.1.0`, so restore works. |
 
 ## Risks / watch list
 
