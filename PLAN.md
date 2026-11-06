@@ -8,7 +8,7 @@
 
 | Item | Value |
 | --- | --- |
-| Phase | 9 — CI/CD verified; release approval pending |
+| Phase | 9 — CI/CD verified; v0.1.0 tagged; NuGet trust policy pending |
 | Branch | `main` |
 | Package | `Mietex.CosmosDb` (MIT, `net8.0;net10.0`) |
 | Scope | This repository only; host repositories are out of scope. |
@@ -17,7 +17,7 @@
 | Test count | 165 passing (`net10.0`): 84 unit + 80 integration + 1 smoke |
 | Last green run | `net10.0` full suite green (167); `net8.0` unit suite green (84) |
 | Emulator | Real vNext emulator, real containers, no SDK mocks |
-| Next action | Human approval, then tag `v0.1.0` to trigger NuGet trusted publishing |
+| Next action | Create the NuGet trusted-publishing policy for `pmieten/MietexCosmosDb`, workflow `publish.yml`, environment `release`; then rerun the failed publish run |
 
 ## TODOs
 
@@ -122,7 +122,7 @@ Source: [the independent implementation review](the independent implementation r
 | 2026-11-05 | 1 | Spec written and open questions resolved. |
 | 2026-11-06 | 2-4 | Scaffold, 167-test red suite, independent test review, fixes. |
 | 2026-11-06 | 5-6 | Implemented library; full suite green; independent implementation review; blockers and should-fix items fixed. |
-| 2026-11-06 | 8-9 | DocFX site, migration guides, release runbook, CI/Integration/Docs/CodeQL/publish workflows pushed. CI and Integration green; Pages deploy verification pending. |
+| 2026-11-06 | 8-9 | DocFX site, release runbook, CI/Integration/Docs/CodeQL workflows pushed and green. Public repo recreated with clean history. Tag `v0.1.0` pushed; publish run failed only at NuGet trusted login because no matching trust policy exists yet. |
 
 ## Risks / watch list
 
