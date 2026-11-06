@@ -18,8 +18,6 @@ The package targets `net8.0` and `net10.0`.
 - [Partition locks](articles/partition-locks.md)
 - [Serialization](articles/serialization.md)
 - [Local emulator](articles/emulator.md)
-- [Migrate from legacy host](migration/eorderflow.md)
-- [Migrate from legacy host](migration/ms-dc.md)
 - [API reference](api/index.md)
 
 ## Design principles

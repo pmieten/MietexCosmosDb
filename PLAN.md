@@ -11,9 +11,9 @@
 | Phase | 9 — CI/CD verified; release approval pending |
 | Branch | `main` |
 | Package | `Mietex.CosmosDb` (MIT, `net8.0;net10.0`) |
-| Source projects | READ-ONLY: `legacy host root\legacy host`, `legacy host root\legacy host` |
+| Scope | This repository only; host repositories are out of scope. |
 | Test strategy | Real Cosmos DB vNext emulator in Docker; SDK `Container` mocks forbidden |
-| Emulator used locally | `cosmos-legacy host-Dev`, https://localhost:8281 |
+| Emulator used locally | local vNext emulator, https://localhost:8281 |
 | Test count | 165 passing (`net10.0`): 84 unit + 80 integration + 1 smoke |
 | Last green run | `net10.0` full suite green (167); `net8.0` unit suite green (84) |
 | Emulator | Real vNext emulator, real containers, no SDK mocks |
@@ -51,7 +51,7 @@
 
 ### 4. Test review #1
 - [x] Independent review of test quality, seam usage, determinism, forbidden mocks.
-- [x] Apply fixes (blockers B1–B3 and high-value should-fix items; report in `docs/reviews/01-test-review.md`).
+- [x] Apply fixes (blockers B1–B3 and high-value should-fix items; report in `the independent test review`).
 
 ### 5. Implementation
 - [x] Contracts, options validation, client provider.
@@ -70,7 +70,7 @@
 ### 8. Documentation
 - [x] README quick start and concepts.
 - [x] DocFX site: index, articles, API metadata, toc.
-- [x] Migration guides for legacy host and legacy host.
+- [x] Generic storage-compatibility and migration guidance.
 - [x] Release/versioning/NuGet trusted-publishing runbook.
 
 ### 9. CI/CD and publishing
@@ -85,7 +85,7 @@
 
 ## Review #2 remediation TODO
 
-Source: [docs/reviews/02-implementation-review.md](docs/reviews/02-implementation-review.md). Commit after each stage.
+Source: [the independent implementation review](the independent implementation review). Commit after each stage.
 
 ### Stage A — security blockers
 - [x] B1: require every `AccountEndpoint` in a connection string to be loopback; reject duplicates that mix local and remote.
@@ -131,6 +131,6 @@ Source: [docs/reviews/02-implementation-review.md](docs/reviews/02-implementatio
 - Lock tests must use short lease/acquisition durations; the production defaults are 2 min / 30 s.
 - `TypeNameHandling.Auto` is a compatibility requirement for existing polymorphic documents and is a
   security risk for untrusted input; documented in README/SECURITY.
-- legacy host `Entity.Etag` is currently private; migration requires making it public. Documented only, no
-  host edits in this repository.
+- Legacy host entities may need a public, nullable ETag property with `[JsonProperty("_etag")]`;
+  this repository documents the requirement and never edits host code.
 - Integration suite requires Docker locally; CI provides the service container.

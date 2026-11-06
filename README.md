@@ -109,15 +109,12 @@ Integration tests skip when the emulator is unreachable; CI turns a skipped inte
 failure. The emulator contract is documented in
 [docs/articles/emulator.md](docs/articles/emulator.md).
 
-## Migrating
-
-- [legacy host migration guide](docs/migration/eorderflow.md)
-- [legacy host migration guide](docs/migration/ms-dc.md)
-- [Engineering spec](docs/specs/0001-mietex-cosmosdb.md)
+## Storage compatibility
 
 Keep the existing JSON property names (`id`, `_etag`, and the partition-key member) and the
 container partition key path. The C# property is named `PartitionKey`, but that does not require a
-storage migration.
+storage migration. See the [engineering spec](docs/specs/0001-mietex-cosmosdb.md) and the
+[serialization article](docs/articles/serialization.md).
 
 ## Releasing
 

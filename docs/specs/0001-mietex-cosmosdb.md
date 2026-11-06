@@ -2,30 +2,16 @@
 
 ## Problem Statement
 
-Two production codebases (`legacy host` and `legacy host`) contain hand-rolled, near-duplicate Cosmos DB
-persistence layers. Each owns its own context base class, `CosmosDbSet<T>`, JSON serializer, query
-helpers, and emulator workarounds. The two copies have drifted in ways that are not documented and
-are only discoverable by reading both implementations:
+Cosmos DB persistence code tends to grow organically: a context base class, set helpers, a JSON
+serializer, query helpers, emulator workarounds, audit stamping, soft delete, and locking. When that
+code is copied between services, the copies drift. The same operation can write with `UpsertItem` in
+one service and `ReplaceItem` in another; one service may soft-delete, another may hard-delete; ETag
+write-back, batch errors, cancellation, and emulator support may differ. The result is duplicate
+maintenance, divergent semantics, and test suites that assert SDK interactions instead of behavior.
 
-- One writes existing entities with `UpsertItem`, the other with `ReplaceItem`.
-- One soft-deletes `IDeletedAuditEntity` records with a patch, the other always hard-deletes.
-- One writes ETags back after a batch, the other does not.
-- One reports batch failures with a generic `Exception` and console output, the other builds a
-  semi-structured message with `ILogger`.
-- One has lifecycle hooks, cancellation, disposal, and partition locking; the other does not.
-- One relaxes TLS only for loopback emulator endpoints and bootstraps the emulator database; the
-  other has no emulator support at all.
-- Both cache a single static `CosmosClient`, which makes test isolation depend on nulling a static
-  field, and makes it impossible to run two differently configured hosts in one process.
-
-The practical consequences are duplicate maintenance, divergent semantics for the same operation,
-latent bugs (for example an `Etag` member that is not publicly observable, so the entity contract
-cannot be implemented), test suites that assert SDK interactions with mocks instead of real
-behavior, and no reusable, documented package for future services.
-
-This spec defines a single MIT-licensed library, `Mietex.CosmosDb`, that captures the shared
-behavior, makes every source-level divergence an explicit option, and is validated against a real
-Cosmos DB emulator rather than SDK mocks.
+This spec defines a single MIT-licensed library, `Mietex.CosmosDb`, that provides the shared
+behavior, makes every divergence an explicit option, and is validated against a real Cosmos DB
+emulator rather than SDK mocks.
 
 ## Solution
 
@@ -49,17 +35,15 @@ Ship a small .NET library, package ID and root namespace `Mietex.CosmosDb`, targ
   request charge.
 - A cached, injectable, resettable `CosmosClientProvider`.
 
-The two host repositories are not modified by this spec. Migration is documented for both.
-
 ## User Stories
 
 1. As a host application developer, I want a single entity contract with `Id`, `PartitionKey`, `Discriminator`, `Etag`, and `IsNew`, so that the library can operate on my existing entity base classes without owning them.
 2. As a host application developer, I want to declare that my existing `Entity` class implements the contract with no changes to its storage shape, so that migration does not rewrite documents.
-3. As a host application developer, I want generic created-audit, updated-audit, and deleted-audit contracts, so that both of my systems' different `UserId` types fit the same library.
+3. As a host application developer, I want generic created-audit, updated-audit, and deleted-audit contracts, so that different host user types fit the same library.
 4. As a host application developer, I want a combined audit contract, so that entities that are both created- and updated-audited need only one interface.
 5. As a host application developer, I want audit stamping to preserve the current rules, including the existing `skipUserId` behavior, so that migration does not silently change audit data.
-6. As an legacy host developer, I want to pass `skipEmployeeId: true` on internal writes, so that system-generated changes are not attributed to a user.
-7. As an legacy host developer, I want an option that rejects audited writes when no user context is set, so that the current `AppDbContext` guard is expressed as configuration rather than a subclass override.
+6. As a host application developer, I want to pass `skipUserId: true` on internal writes, so that system-generated changes are not attributed to a user.
+7. As a host application developer, I want an option that rejects audited writes when no user context is set, so that the current `AppDbContext` guard is expressed as configuration rather than a subclass override.
 8. As a host application developer, I want to set or replace the current user on an existing context, so that long-lived scoped contexts can switch identity.
 9. As a host application developer, I want the context to expose its effective options, so that I can create a copy context for a different partition key.
 10. As a host application developer, I want partition and container scoping fixed at context construction, so that no query can accidentally escape the partition.
@@ -75,15 +59,15 @@ The two host repositories are not modified by this spec. Migration is documented
 20. As a host application developer, I want to clear all set caches from the context, so that lock acquisition or an external change can force fresh reads.
 21. As a host application developer, I want adding a new entity to mark the partition key automatically, so that documents are always stored in the context's partition.
 22. As a host application developer, I want choosing between upsert and replace for existing entities, so that both source behaviors remain available.
-23. As an legacy host developer, I want upsert to remain the default, so that current write semantics are preserved.
-24. As an legacy host developer, I want replace to be selectable per context, so that a missing document is a failure instead of a silent create.
+23. As a host application developer, I want upsert to remain the default, so that current write semantics are preserved.
+24. As a host application developer, I want replace to be selectable per context, so that a missing document is a failure instead of a silent create.
 25. As a host application developer, I want last-write-wins to remain the default, so that migration does not introduce new concurrency failures.
 26. As a host application developer, I want optional ETag-conditional updates, deletes, and patches, so that I can opt into optimistic concurrency where it matters.
 27. As a host application developer, I want one transactional batch per save, so that all pending changes in a partition commit or fail together.
 28. As a host application developer, I want the batch operation limit enforced before any network call, so that a 101-operation save fails fast and predictably.
 29. As a host application developer, I want soft delete implemented as a Cosmos patch for deleted-audit entities, so that the document and its audit fields remain queryable.
-30. As an legacy host developer, I want soft delete to remain the default for deleted-audit entities, so that current deletion behavior is preserved.
-31. As an legacy host developer, I want a per-context switch to keep hard delete, so that API-key deletion semantics do not change during migration.
+30. As a host application developer, I want soft delete to remain the default for deleted-audit entities, so that current deletion behavior is preserved.
+31. As a host application developer, I want a per-context switch to keep hard delete, so that API-key deletion semantics do not change during migration.
 32. As a host application developer, I want hard delete available explicitly, so that GDPR/retention jobs can remove documents.
 33. As a host application developer, I want arbitrary patch operations to flow through the same batch, so that partial updates stay atomic with other changes.
 34. As a host application developer, I want ETags written back after a successful batch, so that the in-memory objects are immediately reusable for a conditional update.
@@ -121,8 +105,8 @@ The two host repositories are not modified by this spec. Migration is documented
 66. As a host application developer, I want locks counted against the 100-operation batch limit, so that a save cannot silently exceed Cosmos limits.
 67. As a host application developer, I want a locking context base that wires locks into save, clear, abandonment, and disposal, so that I do not reimplement the lifecycle.
 68. As a host application developer, I want the same resource key in different partitions to produce independent locks, so that tenant isolation is preserved.
-69. As an legacy host developer, I want a documented, mechanical migration path to the shared context and serializer, so that I can remove the duplicated base class without changing entity storage.
-70. As an legacy host developer, I want a documented migration path that preserves replace, hard delete, and lock behavior, so that existing API keys and counters keep working.
+69. As a host application developer, I want a documented, mechanical migration path to the shared context and serializer, so that I can remove the duplicated base class without changing entity storage.
+70. As a host application developer, I want a documented migration path that preserves replace, hard delete, and lock behavior, so that existing API keys and counters keep working.
 71. As a maintainer, I want all Cosmos behavior tested against a real emulator, so that the tests exercise serialization, batching, ETags, and locks as the SDK actually implements them.
 72. As a maintainer, I want SDK `Container`, `TransactionalBatch`, and response mocks to be forbidden, so that the suite cannot pass while the real integration is broken.
 73. As a test author, I want one unique database per test run and one container per test class, so that parallel test classes do not interfere and cleanup is a single delete.
@@ -151,8 +135,8 @@ The two host repositories are not modified by this spec. Migration is documented
 - One test project containing unit, integration, and packaging tests, separated by xUnit traits.
 - Build infrastructure: `Directory.Build.props`, `Directory.Packages.props`, `global.json` (pin the
   .NET SDK feature band), `LICENSE` (MIT), `README.md`, and `docs/`.
-- Documentation deliverables: `README.md`, this spec, and two migration guides, one per host
-  (`docs/migration/eorderflow.md`, `docs/migration/ms-dc.md`). No host source is changed.
+- Documentation deliverables: `README.md`, this spec, DocFX articles, and generic
+  storage-compatibility guidance. No host source is changed.
 - Root namespace `Mietex.CosmosDb`, flat. The only public namespace is `Mietex.CosmosDb`; no
   `Locking` or `Serialization` sub-namespaces.
 - The library accepts and returns real Cosmos SDK types (`Container`, `TransactionalBatch`,
@@ -437,7 +421,7 @@ API rules that follow from the shapes above:
 - `ICosmosEntity.IsNew` is a method, not a property, because both host `Entity` classes already
   expose `bool IsNew()`. Declaring the interface must not require changing entity bodies.
 - `TUser` is constrained to `class` because `TUser?` must mean a nullable reference type; both host
-  `UserId` types are classes.
+  `TUser` types are classes.
 - `CosmosDbSet<T>` is constructed by the context only. Its constructor is not public, so cache and
   discriminator settings cannot be bypassed.
 - `CosmosDbSet<T>.Query` returns `IQueryable<T>` backed by
@@ -550,7 +534,7 @@ Failure semantics:
 
 ### Audit stamping
 
-- `Add` stamps in the same order and with the same conditions as both sources:
+- `Add` stamps in the same order and with the same conditions as legacy implementations:
   - New entity + `ICreatedAuditEntity<TUser>`: always set `CreatedDate = now`; set `CreatedById`
     only when `skipUserId` is `false`.
   - New entity + `IUpdatedAuditEntity<TUser>`: set both `UpdatedDate` and `UpdatedById` only when
@@ -693,50 +677,9 @@ Failure semantics:
 - The library does not publish a `ToListAsync` extension for `IAsyncEnumerable<T>`, to avoid
   ambiguity with `System.Linq.Async` in hosts that already reference it.
 
-### Source behavior mapping and configurable switches
+### Configurable behavior and storage compatibility
 
-| Behavior | legacy host source | legacy host source | Library decision / switch |
-| --- | --- | --- | --- |
-| Client lifetime | Static `DbClient` per process | Static `DbClient` per process | `ICosmosClientProvider`, keyed cache, `Shared` + `ResetShared()` |
-| Client options hook | Static `ConfigureClientOptions` | None | Per-context `CosmosDbOptions.ConfigureClientOptions` |
-| Consistency | SDK default (Session) | Explicit `Session` | `ConsistencyLevel.Session` default; configurable |
-| Serializer | String enum + hierarchy + calendar date + user-id converters | String enum + date converter | `SerializerSettings` / `ConfigureSerializerSettings`; host supplies converters |
-| Emulator support | Loopback TLS + gateway + database bootstrap | None | `CosmosLocalEndpointSupport`, always loopback-only |
-| Set discovery | Reflection over public `CosmosDbSet<>` properties | Same | Same, plus `Set<T>()` fallback |
-| Discriminator filter | `typeof(T).Name` | `typeof(T).Name` | Same default; `DiscriminatorResolver` override |
-| Point read | `ReadItemAsync`, cache | Same | Same + ETag from response + optional cache |
-| Cache | Always on, no eviction on delete | Same | `EnableCache`; hard-delete eviction |
-| Audit stamping | Calendar now + user id | Same | `TimeProvider` + generic contracts; identical conditions |
-| User-required guard | Subclass override throws | Subclass override throws | `RequireUserForAuditedWrites` option |
-| Existing entity write | `UpsertItem` | `ReplaceItem` | `UpdateMode.Upsert` (default) / `Replace` |
-| Concurrency | Last write wins | Last write wins | `ConcurrencyMode.LastWriteWins` (default) / `MatchEtag` |
-| Soft delete | Patch `DeletedDate`/`DeletedById` | Never; always hard delete | `EnableSoftDelete` (default `true`) + per-call flag |
-| Patch | `PatchItem` | `PatchItem` | Same, unified `Patch` API |
-| Batch limit | Not enforced | `100` via hook | `BatchOperationLimit` default `100`, hook override |
-| ETag write-back | Yes | No | Always; non-generic batch indexer |
-| Batch failure | Generic `Exception`, console | Generic `Exception`, `ILogger` | `CosmosBatchException` |
-| Lifecycle hooks | None | `EnsureUsable`, `ValidateBatchOperationCount`, `PrepareBatch`, `OnBatchCommitted`, `OnSaveFinishedAsync` | Same names, in the base class |
-| Cancellation | None on save/query | Save only | All async operations |
-| Disposal | `Dispose` no-op | `IAsyncDisposable` only | `IDisposable` + `IAsyncDisposable` |
-| Locking | None | `AppDbContext` + `CosmosPartitionLock` | `CosmosLockingDbContextBase` + configurable lock options |
-| Time source | `ICalendar` | `ICalendar` | `TimeProvider` |
-| Logging | `Console.WriteLine` | `ILogger` | `ILogger` only, query text at trace |
-| Index metrics | `#if DEBUG` | `#if DEBUG` | `PopulateIndexMetrics` (default `false`) |
-| Partition key member | `PartitionKey` | `PartitionKeyValue` | `PartitionKey` |
-| Skip-user flag | `skipEmployeeId` | `skipEmployeeId` | `skipUserId` |
-| Namespace | `legacy host.CosmosDb` | `legacy host.Entities.CosmosDb` | `Mietex.CosmosDb` |
-
-The C# interface property is named `PartitionKey`, but the JSON member name and the container
-partition key path do not have to change. Keep the existing JSON attribute and container path when
-migrating. In particular, an legacy host entity with `[JsonProperty("PartitionKeyValue")]` must stay
-`[JsonProperty("PartitionKeyValue")]` unless the container path is migrated from
-`/PartitionKeyValue` to `/PartitionKey` in the same deployment. Renaming only the property without
-the attribute changes storage shape and breaks point reads and writes.
-
-Likewise, keep `[JsonProperty("_etag")]` on `Etag`. Point reads compensate for a missing attribute,
-but query results do not, and a missing attribute can persist a separate `"Etag"` member.
-
-Differences that must be an explicit per-context switch, not a heuristic:
+Each divergence is an explicit per-context option, never a heuristic or a compile-time symbol:
 
 1. `UpdateMode` — upsert versus replace.
 2. `EnableSoftDelete` — soft versus hard delete.
@@ -747,99 +690,13 @@ Differences that must be an explicit per-context switch, not a heuristic:
 7. Context base class — `CosmosDbContextBase` versus `CosmosLockingDbContextBase`.
 8. `ClientKey`/`ClientProvider` — shared client versus isolated/injected client.
 
-No behavior is selected by compile-time `#if DEBUG` or by the host assembly.
+The C# interface property is named `PartitionKey`, but the JSON member name and the container
+partition key path do not have to change. Keep the existing JSON attribute and container path when
+migrating. Renaming only the property without the attribute changes storage shape and breaks point
+reads and writes.
 
-Method-level mapping, for mechanical migration:
-
-- `Add(T entity, bool skipEmployeeId)` becomes `Add(T entity, bool skipUserId)`.
-- `SaveChangesAsync()` / `SaveChangesAsync(CancellationToken)` becomes
-  `SaveChangesAsync(CancellationToken)`.
-- `Delete(entity)` and `Delete(entity, useSoftDeleteIfPossible)` become
-  `Delete(entity, useSoftDeleteIfPossible = true)` with the `EnableSoftDelete` switch.
-- `PatchOperation(string, IReadOnlyList<PatchOperation>)` becomes
-  `Patch(string, IReadOnlyList<PatchOperation>)`; the entity overload keeps the same shape.
-- `GetItemQueryIterator` and `GetItemLinqQueryable` keep their names and semantics.
-- `ClearCache()`, `Clear()`, `ClearAsync()`, and `Dispose()` keep their names.
-- `DbSetList` becomes `DbSets` (read-only). The C# property becomes `PartitionKey`, but keep the
-  existing JSON name and container partition key path (see the note above).
-- `legacy context base.ConfigureClientOptions` (static) becomes
-  `CosmosDbOptions.ConfigureClientOptions` (per context).
-- `AppDbContext.CreateCopyDbContext()` stays host-owned and is rebuilt from `Options` + `CurrentUser`.
-- `AppDbContext.SetUserContext(...)` becomes the base `SetUserContext(...)`.
-- `AppDbContext.PerformLockUntilSaveChanges[Async]` keeps its name on the locking base class.
-- `CosmosPartitionLock.LeaseDocument` becomes the top-level `CosmosLockLease`.
-- The source-internal `EntityOperation` and `EntityContainerWrapper` types are not public in the
-  library; the equivalent pending-operation types stay internal.
-
-### Migration notes (hosts are not modified by this spec)
-
-#### legacy host
-
-1. Delete the duplicate Cosmos persistence types when migrating, including `CosmosDbSet<T>` and
-   `ICosmosDbSet` (they live in the `legacy host` namespace, not `legacy host.CosmosDb`) and the
-   context base class. Leaving them in place creates ambiguous `CosmosDbSet` and `ICosmosDbSet`
-   references in almost every file that imports `legacy host`. Update `using` directives; aliasing
-   is a temporary escape hatch only.
-2. Declare `legacy host.Core.Entity` as `: ICosmosEntity`. It already has `Id`, `PartitionKey`,
-   `Discriminator`, `Etag`, and `IsNew()`. Keep `[JsonProperty("id")]` and `[JsonProperty("_etag")]`.
-   Annotate `Etag` as `string?` to match the contract; the value is already treated as nullable by
-   `IsNew()`.
-3. Change the audit interfaces to inherit the generic versions:
-   `ICreatedAuditEntity : ICreatedAuditEntity<UserId>`,
-   `IUpdatedAuditEntity : IUpdatedAuditEntity<UserId>`,
-   `IDeletedAuditEntity : IDeletedAuditEntity<UserId>`. `UserId` is already a class.
-4. Replace `legacy context base` with `CosmosDbContextBase<Entity, UserId>` (or the locking
-   variant if a host wants leases). Map constructor arguments into `CosmosDbOptions`; expose
-   `CreateCopyDbContext` in the host as `new AppDbContext(Options with { PartitionKey = ... }, CurrentUser)`.
-5. Replace `ICalendar.Now` with a host-side `TimeProvider` adapter that returns `calendar.Now` in
-   UTC. Run audit and soft-delete timestamps through it.
-6. Recreate the serializer settings with `CosmosSerializerSettingsFactory.Create` and add
-   `StringEnumConverter`, `HierarchyEntityJsonConverter`, `DateTimeOffsetJsonConverter { Calendar }`,
-   and `UserIdJsonConverter`. `TypeNameHandling.Auto` is already the factory default.
-7. Replace the `ConfigureClientOptions` static hook with `CosmosDbOptions.ConfigureClientOptions`.
-   If multiple hosts share a process, give each a distinct `ClientKey`.
-8. Delete `DbClient = null` test resets; call `CosmosClientProvider.ResetShared()` in fixture setup
-   and teardown, or inject a provider.
-9. Replace `PatchOperation(...)` calls with `Patch(...)`; `Delete(entity, useSoftDeleteIfPossible)`
-   keeps its shape.
-10. Expect three behavior changes: batch failures are `CosmosBatchException`; the 100-operation
-    limit is now enforced; logs go through `ILogger` instead of `Console`. ETag write-back already
-    existed in legacy host, so that part is unchanged.
-11. `Clear()` still exists; it discards pending changes and caches. A context without locks does not
-    need `ClearAsync`.
-12. `CatalogDbContext` keeps partition key `"MasterData"` and uses the same base context without locks.
-
-#### legacy host
-
-1. Make `legacy host.Entities.Core.Entity.Etag` publicly readable and writable and annotate it
-   as `string?` (it is currently a private property). Without this, `ICosmosEntity` cannot be
-   implemented. Keep `[JsonProperty("_etag")]`. Also delete the duplicate `CosmosDbSet<T>` and
-   `ICosmosDbSet` from `legacy host.Entities.CosmosDb` so the `Mietex.CosmosDb` types are
-   unambiguous.
-2. Declare `Entity : ICosmosEntity`; keep `IsNew()` and the existing `Id` generation.
-3. Change the audit interfaces to inherit `ICreatedAuditEntity<UserId>`, etc. `UserId` is a class.
-4. Replace `legacy context base` with `CosmosLockingDbContextBase<Entity, UserId>` for `AppDbContext`
-   and `CosmosDbContextBase<Entity, UserId>` for `CatalogDbContext`. Set `UpdateMode = Replace` and
-   `EnableSoftDelete = false` to preserve current semantics, including hard deletion of `ApiKey`.
-   Session consistency remains the default.
-5. Remove `AppDbContext`'s `_locks` dictionary, overrides, and `ReleaseLocksAsync`; the base class owns
-   them. Keep `TenantInfo`, the partition key (`TenantCode`), and the public lock methods
-   (inherited).
-6. Rename `CosmosPartitionLock.LeaseDocument` references to `CosmosLockLease` in tests and
-   diagnostics.
-7. Update `AcquireAsync` call sites to the new signature (options and logger parameters). Lock
-   defaults match the source: 30 s acquisition, 2 min lease, 5 s cleanup.
-8. Replace `Clear()` calls made while a lease is held with `ClearAsync()` where possible; the
-   synchronous overload still releases leases but blocks. Prefer `DisposeAsync`.
-9. Replace mock-based lock tests. `AppDbContext.Container` is now get-only, and SDK mocks are forbidden.
-   Port the scenarios to the emulator: ETag fencing, takeover, cancellation, idempotent cleanup,
-   abandonment, empty-save release, failure release, batch limit, disposal guard.
-10. Expect new behavior: ETags are written back after saves; batch failures are
-    `CosmosBatchException`; audit `UpdatedDate` follows the shared rules; soft delete is off unless
-    enabled.
-11. The source's `PerformLockUntilSaveChanges` / `PerformLockUntilSaveChangesAsync` signatures and
-    resource-key format are preserved, so service code changes are limited to namespace/usings and
-    exception handling.
+Likewise, keep `[JsonProperty("_etag")]` on `Etag`. Point reads compensate for a missing attribute,
+but query results do not, and a missing attribute can persist a separate `"Etag"` member.
 
 ### Packaging, versioning, and documentation
 
@@ -911,7 +768,7 @@ capture, test entity types, and a `CosmosClientProvider` factory delegate that c
 client. If a scenario seems to require an SDK mock, the design is wrong: extract the decision into a
 pure function or test it against the emulator.
 
-The two existing mock-based suites (`CosmosPartitionLockTests`, `AppDbContextLockTests` in legacy host) are
+The two existing mock-based suites (`legacy lock tests`, `legacy lock tests` in legacy host) are
 the prior art for the scenarios, not for the technique. Every scenario they cover is ported to the
 emulator, plus the cross-process contention and atomic rollback cases they could not cover.
 
@@ -1072,7 +929,6 @@ Locking:
 
 ## Out of Scope
 
-- Modifying `legacy host root\legacy host` or `legacy host root\legacy host` in any way. This spec only documents migration.
 - Database or container provisioning for production. `EnsureLocalDatabaseExistsAsync` is
   emulator-only; containers are created by infrastructure or by tests.
 - An `IContainer`/`ITransactionalBatch` abstraction, repository pattern, unit-of-work abstraction
@@ -1116,10 +972,10 @@ Locking:
   document this in the README.
 - The 100-operation limit is a hard Cosmos constraint. Locks consume one operation each. The library
   fails fast rather than splitting batches, because splitting breaks atomicity.
-- ETag write-back changes legacy host behavior. With `ConcurrencyMode.LastWriteWins` it does not introduce
-  412s; it only makes the in-memory object accurate. `MatchEtag` is opt-in.
+- ETag write-back makes the in-memory object accurate without changing last-write-wins behavior.
+  `MatchEtag` is opt-in.
 - Soft delete changes query semantics only if a host enables it for entities that previously
-  hard-deleted. legacy host must set `EnableSoftDelete = false` where API keys are removed.
+  hard-deleted. A host that needs hard deletes sets `EnableSoftDelete = false`.
 - The `ICalendar` to `TimeProvider` mapping is host-owned. A wrong adapter changes audit timestamps
   but not document structure.
 - Query results deserialize `_etag` only when the host entity annotates it. Point reads compensate;
@@ -1135,7 +991,7 @@ Locking:
 ### Compatibility checklist for a host migration
 
 - Entity implements `ICosmosEntity`; `Etag` is public.
-- Audit interfaces inherit the generic contracts with the host `UserId`.
+- Audit interfaces inherit the generic contracts with the host `TUser`.
 - Context options reproduce the host's previous consistency, update mode, soft-delete mode, cache,
   index metrics, converters, and client options.
 - Namespace collisions with the old `CosmosDb` types are removed.
@@ -1147,13 +1003,13 @@ Locking:
 
 ### Resolved decisions
 
-1. **Default cache:** `EnableCache = true`. Both sources cache unconditionally; preserving that
+1. **Default cache:** `EnableCache = true`. Legacy implementations cache unconditionally; preserving that
    behavior wins over a new-consumer preference. Invalidation is documented.
-2. **Discriminator on point read:** no check. Both sources return whatever the point read finds.
+2. **Discriminator on point read:** no check. Legacy implementations return whatever the point read finds.
    Adding a mismatch check would be new behavior and is deferred. The set's LINQ query still filters
    by discriminator; `FindAsync` remains a raw point read.
-3. **Soft-delete default for legacy host:** the library defaults to `EnableSoftDelete = true`; legacy host sets
-   `false` in its options. No library-side special case.
+3. **Soft-delete default:** the library defaults to `EnableSoftDelete = true`; a host that needs
+   hard deletes sets `false` in its options. There is no library-side special case.
 4. **Public API baseline:** deferred. `Microsoft.CodeAnalysis.PublicApiAnalyzers` and
    `PublicAPI.Shipped.txt` are a v1.1 hardening item, not a v0.1 blocker.
 5. **Target framework matrix:** build, unit, and pack run for `net8.0` and `net10.0`. The emulator
@@ -1171,5 +1027,5 @@ Locking:
     workflow file `publish.yml`. These values are documented as configuration variables so a fork can
     change them.
 11. **Test framework:** xUnit v3 (`Assert.Skip`, fixture lifetime, VSTest runner).
-12. **Cache and locks:** acquiring a lock clears all set caches, matching both sources. Selective
+12. **Cache and locks:** acquiring a lock clears all set caches, matching legacy implementations. Selective
     invalidation is not worth the complexity for v0.1.
