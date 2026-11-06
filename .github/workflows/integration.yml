@@ -36,7 +36,7 @@ jobs:
       MIETEX_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Restore
