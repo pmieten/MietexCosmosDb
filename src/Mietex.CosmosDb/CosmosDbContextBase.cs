@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Newtonsoft.Json;
 
 namespace Mietex.CosmosDb;
 
@@ -302,6 +303,7 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         EnsureUsable();
 
         var succeeded = true;
+        var operationCount = _pending.Count + AdditionalBatchOperationCount;
         try
         {
             if (_pending.Count == 0)
@@ -311,7 +313,6 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
 
             ValidateBatchOperationCount(_pending.Count);
 
-            var operationCount = _pending.Count + AdditionalBatchOperationCount;
             var batch = _container.CreateTransactionalBatch(new PartitionKey(PartitionKey));
             foreach (var operation in _pending)
             {
@@ -354,6 +355,19 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         {
             succeeded = false;
             throw;
+        }
+        catch (CosmosException exception)
+        {
+            succeeded = false;
+            throw new CosmosBatchException(
+                $"The Cosmos transactional batch request failed with status {exception.StatusCode}.",
+                exception.StatusCode,
+                operationCount,
+                Array.Empty<CosmosBatchOperationError>(),
+                exception.Diagnostics?.ToString(),
+                exception.ActivityId,
+                exception.RequestCharge,
+                exception);
         }
         catch
         {
@@ -511,7 +525,9 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         }
         else
         {
-            var settings = options.SerializerSettings ?? CosmosSerializerSettingsFactory.Create();
+            var settings = options.SerializerSettings is null
+                ? CosmosSerializerSettingsFactory.Create()
+                : CloneSettings(options.SerializerSettings);
             options.ConfigureSerializerSettings?.Invoke(settings);
             clientOptions.Serializer = new CosmosJsonDotNetSerializer(settings);
         }
@@ -519,6 +535,45 @@ public abstract class CosmosDbContextBase<TEntity, TUser> : IDisposable, IAsyncD
         options.ConfigureClientOptions?.Invoke(clientOptions);
         CosmosLocalEndpointSupport.ApplyIfLocalEndpoint(clientOptions, options.ConnectionString);
         return clientOptions;
+    }
+
+    private static JsonSerializerSettings CloneSettings(JsonSerializerSettings source)
+    {
+        var clone = new JsonSerializerSettings
+        {
+            CheckAdditionalContent = source.CheckAdditionalContent,
+            ConstructorHandling = source.ConstructorHandling,
+            ContractResolver = source.ContractResolver,
+            Culture = source.Culture,
+            DateFormatHandling = source.DateFormatHandling,
+            DateFormatString = source.DateFormatString,
+            DateParseHandling = source.DateParseHandling,
+            DateTimeZoneHandling = source.DateTimeZoneHandling,
+            DefaultValueHandling = source.DefaultValueHandling,
+            Error = source.Error,
+            FloatFormatHandling = source.FloatFormatHandling,
+            FloatParseHandling = source.FloatParseHandling,
+            Formatting = source.Formatting,
+            MaxDepth = source.MaxDepth,
+            MetadataPropertyHandling = source.MetadataPropertyHandling,
+            MissingMemberHandling = source.MissingMemberHandling,
+            NullValueHandling = source.NullValueHandling,
+            ObjectCreationHandling = source.ObjectCreationHandling,
+            PreserveReferencesHandling = source.PreserveReferencesHandling,
+            ReferenceLoopHandling = source.ReferenceLoopHandling,
+            SerializationBinder = source.SerializationBinder,
+            StringEscapeHandling = source.StringEscapeHandling,
+            TraceWriter = source.TraceWriter,
+            TypeNameAssemblyFormatHandling = source.TypeNameAssemblyFormatHandling,
+            TypeNameHandling = source.TypeNameHandling,
+        };
+
+        foreach (var converter in source.Converters)
+        {
+            clone.Converters.Add(converter);
+        }
+
+        return clone;
     }
 
     private static string BuildDefaultClientKey(

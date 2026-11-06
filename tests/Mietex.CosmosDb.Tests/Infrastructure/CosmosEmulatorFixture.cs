@@ -1,5 +1,4 @@
 using Microsoft.Azure.Cosmos;
-using Newtonsoft.Json.Converters;
 using Xunit;
 
 namespace Mietex.CosmosDb.Tests.Infrastructure;
@@ -44,7 +43,7 @@ public sealed class CosmosEmulatorFixture : IAsyncLifetime
                     ApplicationName = "Mietex.CosmosDb.Tests",
                     ConnectionMode = ConnectionMode.Gateway,
                     Serializer = new CosmosJsonDotNetSerializer(
-                        CosmosSerializerSettingsFactory.Create(converters: [new StringEnumConverter()])),
+                        CosmosSerializerSettingsFactory.Create()),
                 };
                 CosmosLocalEndpointSupport.ApplyIfLocalEndpoint(clientOptions, ConnectionString);
 
@@ -106,8 +105,7 @@ public sealed class CosmosEmulatorFixture : IAsyncLifetime
             PartitionKey = partitionKey,
             ClientKey = ClientKey,
             ClientProvider = Provider,
-            SerializerSettings = CosmosSerializerSettingsFactory.Create(
-                converters: [new StringEnumConverter()]),
+            SerializerSettings = CosmosSerializerSettingsFactory.Create(),
             ConsistencyLevel = ConsistencyLevel.Session,
         };
 

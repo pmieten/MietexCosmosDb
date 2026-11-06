@@ -463,9 +463,12 @@ API rules that follow from the shapes above:
   consistency, and application name; invoke `ConfigureClientOptions`; then apply loopback TLS
   relaxation. The host hook therefore runs first and may replace the `HttpClientFactory`; local
   relaxation only fills it when still unset.
-- Default `ClientKey` is a deterministic value derived from connection string, application name,
-  consistency level, and database name. Two contexts that intentionally share a client use the same
-  key; contexts with different custom serializers set an explicit `ClientKey`.
+- Default `ClientKey` is `"client-" + uppercase hex SHA-256(connection string, application name,
+  consistency level, database name)`, not a concatenation of the raw connection string. This keeps
+  account keys out of logs and `ToString()` output. Two contexts that intentionally share a client
+  use the same key; contexts with different custom serializers set an explicit `ClientKey`.
+- `CosmosDbOptions.ToString()` and `CosmosClientDescriptor.ToString()` redact the connection string.
+  `ToString()` is a diagnostic surface, not a secret store; never log `ConnectionString` directly.
 - Logger resolution: explicit `Logger`, else `LoggerFactory.CreateLogger(context type)`, else
   `NullLogger.Instance`.
 - Time: `Options.TimeProvider.GetUtcNow()` replaces the host `ICalendar.Now`. Hosts that need tenant
@@ -475,7 +478,11 @@ API rules that follow from the shapes above:
   `CosmosDbSet<>` are instantiated and assigned. C# runs derived property initializers (including
   `= null!`) before the base constructor body, so the assignment survives. `DbSets` exposes the
   discovered sets read-only. `Set<T>()` returns an already-discovered set or creates and registers
-  one for hosts that prefer explicit access.
+  one for hosts that prefer explicit access. Supported property shapes are
+  `public CosmosDbSet<T> Set { get; set; } = null!;` (discovered eagerly) and
+  `public CosmosDbSet<T> Set => Set<T>();` (lazy; appears in `DbSets` after first access). A
+  get-only auto-property is not discovered. Do not write `= Set<T>()` in an initializer: derived
+  initializers run before base field initialization and will fail.
 - The context is not thread-safe for concurrent mutation. `CosmosDbSet` reads are thread-safe; the
   cache is a `ConcurrentDictionary`.
 - `Dispose`/`DisposeAsync` are idempotent. Disposal discards pending changes and caches. The base
@@ -493,9 +500,13 @@ API rules that follow from the shapes above:
   entity's `_etag` mapping is missing.
 - The cache stores only positive results. It is enabled by `EnableCache` (default `true`). Cache
   keys are the string form of the id (`long` formatted invariantly). `FindAsync` consults the cache
-  when enabled; `ClearCache` empties it. Hard delete evicts the id; soft delete keeps the entry
-  because the document still exists and the same object receives the new ETag.
+  when enabled; `ClearCache` empties it. Hard delete evicts the id. Soft delete keeps the entry,
+  applies `DeletedDate`/`DeletedById` to the cached object after a successful commit, and refreshes
+  its ETag. Arbitrary patches and `Patch(string id, ...)` evict the id because their effects cannot
+  be replayed reliably in memory.
 - The cache is best-effort and is not a consistency mechanism. Lock acquisition clears it.
+  A cached value can outlive another context's external write; call `ClearCache` after external
+  changes.
 
 ### Save pipeline
 
@@ -574,12 +585,17 @@ Failure semantics:
 - `CosmosBatchException` is thrown for a non-success batch response. It contains the batch status
   code, operation count, per-operation failures (index, status, message), diagnostics, activity id,
   and request charge.
-- Error messages are read from the operation response stream when available, then the resource
-  fallback, and are truncated (4 KiB per operation) to avoid leaking document bodies.
+- Error messages are read from the operation response stream when available, then the outer batch
+  `ErrorMessage`, then the status code. Reads are bounded to 4 KiB per operation to avoid leaking
+  document bodies and to avoid unbounded allocation.
 - `404` on `Replace` is a normal batch failure and is reported as such; it is not converted to a
   silent create.
-- Batch status `424 Failed Dependency` is the common outer status; per-operation codes carry the
-  real cause.
+- Batch status `424 Failed Dependency` is a common outer status; per-operation codes carry the real
+  cause. `424` entries are not counted in the root-failure summary.
+- Request-level `CosmosException` failures from `ExecuteAsync` (for example 408/429/5xx or transport
+  errors) are wrapped in `CosmosBatchException` with status, diagnostics, activity id, request
+  charge, and the original exception as `InnerException`. Caller cancellation remains
+  `OperationCanceledException`.
 
 ### Locking
 
@@ -591,14 +607,21 @@ Failure semantics:
 - Acquisition first attempts an unconditional create with a deterministic id. On `409`, it reads
   the existing lease and replaces it only when `ExpiresAt <= now`, using `IfMatchEtag`. On `404` or
   `412` it retries. Retry delay is random between `RetryDelayMin` and `RetryDelayMax`.
+- Takeover verifies that the existing document really is a lease before replacing it: matching id,
+  `Discriminator == "DistributedLock"`, non-empty `Owner`, and non-default `ExpiresAt`. A business
+  document whose id happens to equal the deterministic lock id is never overwritten; acquisition
+  throws `InvalidOperationException` instead.
 - Acquisition is bounded by a linked `CancellationTokenSource` with `AcquireTimeout`, then throws
   `TimeoutException` (not `OperationCanceledException`) when the caller's own token was not
   cancelled. The timeout bound and retry delays are real-time; lease expiry comparisons use
   `Options.TimeProvider.GetUtcNow()`.
-- `AddReleaseToBatch` throws `InvalidOperationException` if the handle was released/committed or is
-  already expired at batch preparation, and otherwise adds `DeleteItem(lockId, IfMatchEtag)`.
-- The business transaction and lease release commit atomically. A takeover changes the lease ETag,
-  so the old owner's release fails the whole batch with `412`; the protected writes roll back.
+- `AddReleaseToBatch` is single-use and throws `InvalidOperationException` if the handle was
+  released/committed/already appended or is locally expired at batch preparation. Otherwise it adds
+  `DeleteItem(lockId, IfMatchEtag)`.
+- Two fencing failure modes must be handled by hosts. If the local handle is already expired, the
+  save fails fast with `InvalidOperationException` and no request is sent. If the handle is locally
+  valid but another owner has taken over the lease, the ETag-conditional delete fails the whole
+  batch with `CosmosBatchException` and a `412`; the protected writes roll back.
 - `DisposeAsync` is idempotent, does not inherit a cancelled request token, uses
   `CleanupTimeout`, and ignores `404`/`412`. Other cleanup failures are logged and swallowed;
   expiry is the recovery path.
@@ -703,6 +726,16 @@ Failure semantics:
 | Skip-user flag | `skipEmployeeId` | `skipEmployeeId` | `skipUserId` |
 | Namespace | `legacy host.CosmosDb` | `legacy host.Entities.CosmosDb` | `Mietex.CosmosDb` |
 
+The C# interface property is named `PartitionKey`, but the JSON member name and the container
+partition key path do not have to change. Keep the existing JSON attribute and container path when
+migrating. In particular, an legacy host entity with `[JsonProperty("PartitionKeyValue")]` must stay
+`[JsonProperty("PartitionKeyValue")]` unless the container path is migrated from
+`/PartitionKeyValue` to `/PartitionKey` in the same deployment. Renaming only the property without
+the attribute changes storage shape and breaks point reads and writes.
+
+Likewise, keep `[JsonProperty("_etag")]` on `Etag`. Point reads compensate for a missing attribute,
+but query results do not, and a missing attribute can persist a separate `"Etag"` member.
+
 Differences that must be an explicit per-context switch, not a heuristic:
 
 1. `UpdateMode` — upsert versus replace.
@@ -727,7 +760,8 @@ Method-level mapping, for mechanical migration:
   `Patch(string, IReadOnlyList<PatchOperation>)`; the entity overload keeps the same shape.
 - `GetItemQueryIterator` and `GetItemLinqQueryable` keep their names and semantics.
 - `ClearCache()`, `Clear()`, `ClearAsync()`, and `Dispose()` keep their names.
-- `DbSetList` becomes `DbSets` (read-only); `PartitionKeyValue` becomes `PartitionKey`.
+- `DbSetList` becomes `DbSets` (read-only). The C# property becomes `PartitionKey`, but keep the
+  existing JSON name and container partition key path (see the note above).
 - `legacy context base.ConfigureClientOptions` (static) becomes
   `CosmosDbOptions.ConfigureClientOptions` (per context).
 - `AppDbContext.CreateCopyDbContext()` stays host-owned and is rebuilt from `Options` + `CurrentUser`.
@@ -1091,8 +1125,9 @@ Locking:
 - Query results deserialize `_etag` only when the host entity annotates it. Point reads compensate;
   hosts should still keep the attribute.
 - C# property initializers on contexts run before the base constructor body, so `= null!` on
-  `CosmosDbSet<>` properties does not wipe the discovered instances. This is a language-order
-  dependency; the migration guide should recommend omitting the initializer where practical.
+  `CosmosDbSet<>` properties does not wipe the discovered instances. Use `{ get; set; } = null!;`
+  or an expression-bodied `=> Set<T>()` property. Do not use a get-only auto-property (it is not
+  discovered) and do not use `= Set<T>()` in an initializer (base fields are not initialized yet).
 - Synchronous `Dispose`, `Clear`, and `PerformLockUntilSaveChanges` block on async work. The library
   uses `ConfigureAwait(false)` throughout, but callers in synchronization-context-sensitive
   environments should prefer the async overloads.

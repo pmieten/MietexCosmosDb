@@ -195,6 +195,53 @@ public sealed class CosmosDbOptionsValidationTests
     }
 
     [Fact]
+    public void ContextBuildsClientOptionsFromTheEffectiveOptions()
+    {
+        using var provider = new CapturingProvider();
+        static HttpClient Sentinel() => new();
+        Func<HttpClient> factory = Sentinel;
+        var options = ValidOptions() with
+        {
+            ClientProvider = provider,
+            ClientKey = "unique-key",
+            ApplicationName = "test-app",
+            ConsistencyLevel = ConsistencyLevel.Eventual,
+            ConfigureClientOptions = client => client.HttpClientFactory = factory,
+        };
+
+        using var context = new TestDbContext(options);
+
+        Assert.NotNull(provider.Descriptor);
+        Assert.Equal("unique-key", provider.Descriptor!.ClientKey);
+        Assert.Equal("test-app", provider.Descriptor.ClientOptions.ApplicationName);
+        Assert.Equal(ConsistencyLevel.Eventual, provider.Descriptor.ClientOptions.ConsistencyLevel);
+        Assert.IsType<CosmosJsonDotNetSerializer>(provider.Descriptor.ClientOptions.Serializer);
+        Assert.Same(factory, provider.Descriptor.ClientOptions.HttpClientFactory);
+        Assert.Equal(ConnectionMode.Gateway, provider.Descriptor.ClientOptions.ConnectionMode);
+    }
+
+    [Fact]
+    public void ConfigureSerializerSettingsDoesNotMutateCallerSettings()
+    {
+        using var provider = new CapturingProvider();
+        var callerSettings = new JsonSerializerSettings();
+        var options = ValidOptions() with
+        {
+            ClientProvider = provider,
+            SerializerSettings = callerSettings,
+            ConfigureSerializerSettings = settings =>
+                settings.Converters.Add(new Newtonsoft.Json.Converters.StringEnumConverter()),
+        };
+
+        using var context = new TestDbContext(options);
+
+        Assert.Empty(callerSettings.Converters);
+        var serializer = Assert.IsType<CosmosJsonDotNetSerializer>(
+            provider.Descriptor!.ClientOptions.Serializer);
+        Assert.NotEmpty(serializer.Settings.Converters);
+    }
+
+    [Fact]
     public void DefaultClientKeyIsAHashAndDoesNotContainTheSecret()
     {
         using var provider = new CapturingProvider();

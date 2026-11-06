@@ -1,5 +1,6 @@
 namespace Mietex.CosmosDb.Tests;
 
+[Trait("Category", "Unit")]
 public sealed class InfrastructureSmokeTests
 {
     [Fact]

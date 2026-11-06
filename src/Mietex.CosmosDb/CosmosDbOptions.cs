@@ -40,7 +40,11 @@ public sealed record CosmosDbOptions
     /// <summary>Gets the connection string. Required unless <see cref="Client"/> is supplied.</summary>
     public string? ConnectionString { get; init; }
 
-    /// <summary>Gets an optional pre-built client. The library never disposes it.</summary>
+    /// <summary>
+    /// Gets an optional pre-built client. The library never disposes it. The client owns its
+    /// serializer, consistency level, application name, and transport options; the corresponding
+    /// properties on this record are ignored when <see cref="Client"/> is supplied.
+    /// </summary>
     public CosmosClient? Client { get; init; }
 
     /// <summary>Gets an optional client provider. Mutually exclusive with <see cref="Client"/>.</summary>

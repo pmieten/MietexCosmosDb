@@ -164,6 +164,7 @@ public sealed class ContextHookTests : IntegrationContextTestBase
         var exception = await Record.ExceptionAsync(() => context.SaveChangesAsync(Cancellation));
 
         Assert.Null(exception);
+        Assert.Equal(new[] { true }, context.SaveFinished);
         var response = await ReadRawAsync(entity.Id, partitionKey);
         Assert.Equal("saved", response.Resource.Name);
     }

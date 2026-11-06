@@ -109,6 +109,8 @@ public sealed class CosmosDbSet<T> : ICosmosDbSet
 
     private async Task<T?> FindCoreAsync(string id, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (_cacheEnabled && _cache.TryGetValue(id, out var cached))
         {
             return cached;

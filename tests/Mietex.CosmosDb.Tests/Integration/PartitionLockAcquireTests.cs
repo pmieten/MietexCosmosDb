@@ -188,7 +188,7 @@ public sealed class PartitionLockAcquireTests : LockingIntegrationTestBase
 
         var contenderOptions = LockOptions(
             acquireTimeout: TimeSpan.FromSeconds(1),
-            leaseDuration: TimeSpan.FromSeconds(2));
+            leaseDuration: DefaultLeaseDuration);
         var results = await Task.WhenAll(Enumerable.Range(0, 3).Select(async _ =>
         {
             try

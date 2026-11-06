@@ -57,6 +57,7 @@ public sealed class CosmosSerializerSettingsFactoryTests
     {
         var settings = CosmosSerializerSettingsFactory.Create();
 
-        Assert.All(settings.Converters, converter => Assert.IsType<StringEnumConverter>(converter));
+        var converter = Assert.Single(settings.Converters);
+        Assert.IsType<StringEnumConverter>(converter);
     }
 }
