@@ -14,10 +14,10 @@
 | Source projects | READ-ONLY: `legacy host root\legacy host`, `legacy host root\legacy host` |
 | Test strategy | Real Cosmos DB vNext emulator in Docker; SDK `Container` mocks forbidden |
 | Emulator used locally | `cosmos-legacy host-Dev`, https://localhost:8281 |
-| Test count | 145 passing (`net10.0`): 71 unit + 73 integration + 1 smoke |
-| Last green run | `net10.0` full suite green; `net8.0` unit suite green |
+| Test count | 165 passing (`net10.0`): 84 unit + 80 integration + 1 smoke |
+| Last green run | `net10.0` full suite green (165); `net8.0` unit suite green (84) |
 | Emulator | Real vNext emulator, real containers, no SDK mocks |
-| Next action | Independent implementation review, fix findings, then docs + CI/CD |
+| Next action | Packaging test, docs, CI/CD, then human-in-the-loop checkpoint |
 
 ## TODOs
 
@@ -88,30 +88,30 @@
 Source: [docs/reviews/02-implementation-review.md](docs/reviews/02-implementation-review.md). Commit after each stage.
 
 ### Stage A — security blockers
-- [ ] B1: require every `AccountEndpoint` in a connection string to be loopback; reject duplicates that mix local and remote.
-- [ ] B2: verify an existing lock document is really a `DistributedLock` lease before takeover; never overwrite a business document.
-- [ ] B3: derive the default client key from a hash, not the connection string; redact `ConnectionString` in `CosmosDbOptions.ToString()` and `CosmosClientDescriptor.ToString()`.
-- [ ] Add regression tests for B1/B2/B3.
+- [x] B1: require every `AccountEndpoint` in a connection string to be loopback; reject duplicates that mix local and remote.
+- [x] B2: verify an existing lock document is really a `DistributedLock` lease before takeover; never overwrite a business document.
+- [x] B3: derive the default client key from a hash, not the connection string; redact `ConnectionString` in `CosmosDbOptions.ToString()` and `CosmosClientDescriptor.ToString()`.
+- [x] Add regression tests for B1/B2/B3.
 
 ### Stage B — correctness cluster
-- [ ] S1: make `DiscriminatorResolver` authoritative for writes; test custom resolver end-to-end.
-- [ ] S2: count `AdditionalBatchOperationCount` in the base batch-limit validation; add hook test.
-- [ ] S3: preserve root batch error messages, add fallback, bound the error read; test non-null 409 message.
-- [ ] S4: guard query formatting by `IsEnabled(Trace)`, catch formatter failures, sanitize control characters, single-pass replacement; add tests.
-- [ ] S5: evict or refresh cache after patch-by-id and soft delete; test cached soft-delete state.
+- [x] S1: make `DiscriminatorResolver` authoritative for writes; test custom resolver end-to-end.
+- [x] S2: count `AdditionalBatchOperationCount` in the base batch-limit validation; add hook test.
+- [x] S3: preserve root batch error messages, add fallback, bound the error read; test non-null 409 message.
+- [x] S4: guard query formatting by `IsEnabled(Trace)`, catch formatter failures, sanitize control characters, single-pass replacement; add tests.
+- [x] S5: evict or refresh cache after patch-by-id and soft delete; test cached soft-delete state.
 
 ### Stage C — locking and test infrastructure
-- [ ] S6: make locking `ClearAsync` unconditional after entry and test a canceled token.
-- [ ] S7: guard acquire-vs-dispose, recompute takeover time, retry transient reads, make release single-use, reject empty acquisition ETag.
-- [ ] S8: fixture catches malformed connection strings and skips; database name gets 8+ random hex chars; sanitize skip reason.
-- [ ] S9: add a discovery test for `= null!` auto-properties; document supported set-property shapes.
-- [ ] S10: document and test both fencing failure modes (local expiry vs server 412).
+- [x] S6: make locking `ClearAsync` unconditional after entry and test a canceled token.
+- [x] S7: guard acquire-vs-dispose, recompute takeover time, retry transient reads, make release single-use, reject empty acquisition ETag.
+- [x] S8: fixture catches malformed connection strings and skips; database name gets 8+ random hex chars; sanitize skip reason.
+- [x] S9: add a discovery test for `= null!` auto-properties; document supported set-property shapes.
+- [x] S10: document and test both fencing failure modes (local expiry vs server 412).
 
 ### Stage D — client, migration, test quality
-- [ ] S11: test effective client construction with a unique provider/key; clone serializer settings before callback; document injected-client ownership.
-- [ ] S12: migration docs for JSON property names/container path and `_etag`; add storage-shape tests.
-- [ ] S13: define request-level Cosmos exception contract; wrap or document.
-- [ ] S14: strengthen weak tests (hook invocation, N-way timing, serializer factory list, smoke trait).
+- [x] S11: test effective client construction with a unique provider/key; clone serializer settings before callback; document injected-client ownership.
+- [x] S12: migration docs for JSON property names/container path and `_etag`; add storage-shape tests.
+- [x] S13: define request-level Cosmos exception contract; wrap or document.
+- [x] S14: strengthen weak tests (hook invocation, N-way timing, serializer factory list, smoke trait).
 - [ ] S15: packaging test, CI workflows, DocFX, migration guides (next phase).
 
 ## Phase log
