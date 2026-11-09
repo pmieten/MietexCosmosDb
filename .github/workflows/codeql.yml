@@ -22,11 +22,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: csharp
       - name: Restore
         run: dotnet restore Mietex.CosmosDb.slnx
       - name: Build
         run: dotnet build src/Mietex.CosmosDb/Mietex.CosmosDb.csproj -c Release --no-restore
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
